@@ -1,13 +1,11 @@
-from http.client import responses
 
-from click import prompt
 from flask import Flask, request, jsonify, render_template, g
 import os
 from dotenv import load_dotenv
 import openai
 from pydantic import BaseModel
 from typing import List, Dict
-from db_config import get_connection
+
 import auth
 
 
