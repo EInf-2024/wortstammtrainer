@@ -1,94 +1,109 @@
 from http.client import responses
 
 from click import prompt
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, g
 import os
 from dotenv import load_dotenv
 import openai
 from pydantic import BaseModel
 from typing import List, Dict
 from db_config import get_connection
+import auth
+
 
 app = Flask(__name__)
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI()
 
-class wort(BaseModel):
+class Wort(BaseModel):
     wort: str
-    wortart: int
+    wortart: int        #0: Nomen, 1: Verb, 2: Adjektiv, 3:Adverb
+    word_id: int
 
-#0: Nomen, 1: Verb, 2: Adjektiv, 3:Adverb
+class Exercise(BaseModel):
+    exercise: List[Wort]
 
-class exercise(BaseModel):
-    exercise: List[wort]
-
-class corrected_word(BaseModel):
+class CorrectedWord(BaseModel):
     word: str
-    correct: bool
+    correct: int        #0: Falsch, 1: Richtig
+    word_id: int
 
-class corrected_words_list(BaseModel):
-    corrected_words: List[corrected_word]
+class CorrectedWordsList(BaseModel):
+    corrected_words: List[CorrectedWord]
 
 
+app.route('/login', methods=['POST'])(auth.login)
 
-@app.route("/")
+@auth.route(app, "/student", required_role=["student"])
 def main():
-    return render_template("index.html")
+    return render_template("student.html")
 
+@auth.route(app, "/teacher", required_role=["teacher"])
+def main():
+    return render_template("teacher.html")
 
-
-@app.route("/exercise_create", methods=["POST"])
+@auth.route(app,"/create_exercise", required_role=["student"], methods=["POST"])
 def exercise_create():
     try:
         # Parameter abfragen
-        wordlist_ids = request.args.getlist('wordlist_id', type=int)
-        personal_pool = request.args.get('personal_pool', default='false').lower() == 'true'
-        student_id = request.args.get('student_id', type=int)
+        wordlist_id = request.args.getlist('wordlist_id', type=int)
+        personal_pool = request.args.get('personal_pool', type=int)
+        student_id = g.get("user_id")
 
-        if not wordlist_ids:
+        if not wordlist_id:
             return jsonify({"error": 1, "message": "wordlist_id parameter is required"}), 400
 
         # Verbindung zur Datenbank
-        cnx = get_connection()
-        cursor = cnx.cursor(dictionary=True)
+        with auth.open() as (connection, cursor):
 
-        # Basis-SQL und Parameter vorbereiten
-        base_query = '''
-            SELECT w.word_id, w.name
-            FROM `LA-wörter` w
-            WHERE w.wordlist_id IN ({})
-        '''.format(','.join(['%s'] * len(wordlist_ids)))
-        params = wordlist_ids
+            if personal_pool == 0:
+                base_query = '''
+                    SELECT word_id, name
+                    FROM `LA-wörter`
+                    WHERE wordlist_id = %s
+                    ORDER BY RAND() LIMIT 8
+                '''
+                params = wordlist_id
 
-        # Optional: personal_pool aktiv + student_id benötigt
-        if personal_pool:
-            if not student_id:
-                return jsonify({"error": 1, "message": "student_id is required when personal_pool is true"}), 400
+                cursor.execute(base_query, (params,))
+                result = cursor.fetchall()
 
-            base_query += '''
-                AND EXISTS (
-                    SELECT 1 FROM `LA-fortschritt` f
-                    WHERE f.word_id = w.word_id AND f.student_id = %s
-                )
-            '''
-            params.append(student_id)
+            #personal_pool aktiv + student_id benötigt
+            elif personal_pool == 1:
 
-        base_query += ' ORDER BY RAND() LIMIT 8'
+                base_query = '''
+                    SELECT word_id
+                    FROM `LA-fortschritt`
+                    WHERE score < 5 AND student_id = %s
+                    ORDER BY RAND() LIMIT 8
+                '''
+                params = student_id
 
-        # Ausführen
-        cursor.execute(base_query, params)
-        result = cursor.fetchall()
+                cursor.execute(base_query, (params,))
+                result = cursor.fetchall()
 
-        cursor.close()
-        cnx.close()
+                word_ids = [(row["word_id"]) for row in result]
 
-        words = [row["name"] for row in result]
+                query2 ='''
+                    SELECT word_id, name
+                    FROM `LA-wörter`
+                    WHERE word_id = ({})
+                '''.format(','.join(['%s'] * len(word_ids)))
+
+                cursor.execute(query2, (word_ids,))
+                result = cursor.fetchall()
+
+            else:
+                return jsonify({"error": 1, "message": "personal_pool parameter should be 0 or 1"}), 400
+
+        words = [(row["word_id"], row["name"]) for row in result]
 
         prompt = f"""
-        Klassifiziere die folgenden französischen Wörter nach ihrer Wortart:
-        0 = Nomen, 1 = Verb, 2 = Adjektiv, 3 = Adverb
-        Wörter: '{', '.join(words)}'
+        Sie erhalten französische Wörter in der Form (word_id, name)
+        Klassifizieren Sie diese ihrer Wortart:
+        0 = Nomen, 1 = Verb, 2 = Adjektiv, 3 = Adverb, Der word_id Eintrag muss nur in der Antwort weitergegeben werden
+        Wörter: '{words}'
         """
 
         response = client.beta.chat.completions.parse(
@@ -97,23 +112,24 @@ def exercise_create():
                        "content": "Sie sind ein hilfreicher Assistent, der strukturierte JSON-Daten generiert."},
                       {"role": "user", "content": prompt}],
             max_tokens=300,
-            temperature=0.7,
-            response_format=exercise,
+            temperature=0.3,
+            response_format=Exercise,
         )
 
         response_data = response.choices[0].message.content
-        return jsonify(exercise.model_validate_json(response_data).model_dump())
+        return jsonify(Exercise.model_validate_json(response_data).model_dump())
     except Exception as e:
         return jsonify({"error": 1, "message": f"Fehler beim Abrufen der Aktivitätsdetails: {str(e)}"})
 
-@app.route("/exercise_correct")
+@auth.route(app, "/correct_exercise", required_role=["student"])
 def exercise_correct():
     try:
         completed_exercise = request.args.get("completed_exercise", "")
 
         prompt = f"""
-        Sie kontrollieren Wortstamm Aufgaben. Kontrollieren Sie in dieser {completed_exercise} 8 mal 4 Wörter Liste welche ein Schüler ausgefüllt hat,
-        ob diese 4 Wörter jeweils zum gleichen Stamm gehören, in der Reihenfolge Nomen, Verb, Adjektiv, Adverb aufgereiht sind und markieren sie diese jeweils mit True oder False.
+        Sie erhalten 8x4 Wörter in der Form (word_id, name), kontrollieren Sie immer bei vier Wörtern mit der gleichen 
+        word_id ob diese 4 Wörter jeweils zum gleichen Stamm gehören und markieren sie diese jeweils mit True oder False. 
+        Wörter: {completed_exercise}
         """
 
         response = client.beta.chat.completions.parse(
@@ -123,153 +139,61 @@ def exercise_correct():
                       {"role": "user", "content": prompt}],
             max_tokens=500,
             temperature=0.3,
-            response_format=corrected_words_list,
+            response_format=CorrectedWordsList,
         )
 
-        response_data = response.choices[0].message.content
-        return jsonify(corrected_words_list.model_validate_json(response_data).model_dump())
+        response_data = response.choices[0].message.parsed.corrected_words
+
+        wrong = []
+        right = []
+
+        for i in response_data:
+            if i.correct == False:
+                wrong.append(i.word_id)
+            if i.correct == True:
+                right.append(i.word_id)
+
+        right = list(set(right) - set(wrong))
+
+        with auth.open() as (connection, cursor):
+
+            # First update
+            query1 = '''
+                UPDATE `LA-fortschritt`
+                SET score = score + 1
+                WHERE word_id IN ({})
+            '''.format(','.join(['%s'] * len(right)))
+            cursor.execute(query1, right)
+
+            # Second update
+            query2 = '''
+                UPDATE `LA-fortschritt`
+                SET score = score - 1
+                WHERE word_id IN ({})
+            '''.format(','.join(['%s'] * len(wrong)))
+            cursor.execute(query2, wrong)
+
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({"error": 1, "message": f"Fehler beim Abrufen der Aktivitätenliste: {str(e)}"})
 
-@app.route('/create_folder', methods=['POST'])
-def create_folder():
-    try:
-        # Get parameters from query or form data
-        parent_folder_id = request.args.get('parent_folder_id', type=int)
-        name = request.args.get('name')
-
-        if name is None:
-            return jsonify({"error": 1, "message": "Parameter 'name' is required"}), 400
-
-        # DB connection
-        cnx = get_connection()
-        cursor = cnx.cursor()
-
-        # Insert query
-        insert_query = '''
-            INSERT INTO `LA-ordnerstruktur` (name, parent_folder_id)
-            VALUES (%s, %s)
-        '''
-        cursor.execute(insert_query, (name, parent_folder_id))
-        cnx.commit()
-
-        cursor.close()
-        cnx.close()
-
-        return jsonify({
-            "success": 1,
-            "message": "Ordner erfolgreich erstellt",
-        })
-
-    except Exception as e:
-        return jsonify({"error": 1, "message": f"Fehler beim Erstellen des Ordners: {str(e)}"}), 500
-
-@app.route('/upload_word', methods=['POST'])
-def upload_word():
-    try:
-        # Get parameters
-        wordlist_id = request.args.get('wordlist_id', type=int)
-        name = request.args.get('name')
-
-        # Validate input
-        if not wordlist_id or not name:
-            return jsonify({
-                "error": 1,
-                "message": "Parameters 'wordlist_id' and 'name' are required."
-            }), 400
-
-        # Connect to database
-        cnx = get_connection()
-        cursor = cnx.cursor()
-
-        # Insert word into the table
-        insert_query = '''
-            INSERT INTO `LA-wörter` (name, wordlist_id)
-            VALUES (%s, %s)
-        '''
-        cursor.execute(insert_query, (name, wordlist_id))
-        cnx.commit()
-
-        cursor.close()
-        cnx.close()
-
-        # Success response
-        return jsonify({
-            "success": 1,
-            "message": "Wort erfolgreich hinzugefügt.",
-        })
-
-    except Exception as e:
-        return jsonify({
-            "error": 1,
-            "message": f"Fehler beim Hochladen des Wortes: {str(e)}"
-        }), 500
-
-@app.route('/show_folders', methods=['GET'])
-def show_folders():
-    try:
-        parentfolder_id = request.args.get('parentfolder_id', type=int)
-        if parentfolder_id is None:
-            return jsonify({"error": 1, "message": "Parameter 'parentfolder_id' is required"}), 400
-
-        cnx = get_connection()
-        cursor = cnx.cursor(dictionary=True)
-
-        # Combined SQL query
-        query = '''
-            (
-                SELECT 
-                    f.folder_id AS id,
-                    f.name,
-                    'folder' AS type
-                FROM `LA-ordnerstruktur` f
-                WHERE f.parent_folder_id = %s
-            )
-            UNION
-            (
-                SELECT 
-                    w.wordlist_id AS id,
-                    w.name,
-                    'wordlist' AS type
-                FROM `LA-wortliste` w
-                WHERE w.folder_id = %s
-            )
-            ORDER BY name
-        '''
-
-        # Execute query
-        cursor.execute(query, (parentfolder_id, parentfolder_id))
-        result = cursor.fetchall()
-
-        cursor.close()
-        cnx.close()
-
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": 1, "message": f"Fehler beim Abrufen der Ordnerstruktur: {str(e)}"}), 500
-
-@app.route('/get_classes', methods=['GET'])
+@auth.route(app,'/get_classes',required_role=["teacher"] , methods=['GET'])
 def get_classes():
     try:
-        cnx = get_connection()
-        cursor = cnx.cursor(dictionary=True)
+        with auth.open() as (connection, cursor):
 
-        get_query = 'SELECT class_id, name FROM `LA-klassen` ORDER BY name'
-        cursor.execute(get_query)
-        result = cursor.fetchall()
-
-        cursor.close()
-        cnx.close()
+            get_query = 'SELECT id, label FROM `mf_department` ORDER BY label'
+            cursor.execute(get_query)
+            result = cursor.fetchall()
 
         return jsonify(result)
-
     except Exception as e:
         return jsonify({
             "error": 1,
             "message": f"Fehler beim Abrufen der Klassen: {str(e)}"
         }), 500
 
-@app.route('/get_students', methods=['GET'])
+@auth.route(app,'/get_students',required_role=["teacher"] , methods=['GET'])
 def get_students():
     try:
         class_id = request.args.get('class_id', type=int)
@@ -278,19 +202,31 @@ def get_students():
             return jsonify({"error": 1, "message": "Parameter 'class_id' is required"}), 400
 
 
-        cnx = get_connection()
-        cursor = cnx.cursor(dictionary=True)
+        with auth.open() as (connection, cursor):
 
-        get_query = 'SELECT class_id, name FROM `LA-klassen` WHERE class_id = %s'
+            get_query = 'SELECT id, username FROM `mf_student` WHERE department_id = %s ORDER BY username'
 
-        cursor.execute(get_query, (class_id))
-        result = cursor.fetchall()
-        cursor.close()
-        cnx.close()
+            cursor.execute(get_query, (class_id,))
+            result = cursor.fetchall()
+
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
+@auth.route(app, '/get_wordlists', required_role=["teacher", "student"] , methods=['GET'])
+def get_wordlists():
+    try:
+        with auth.open() as (connection, cursor):
+            query = '''
+            SELECT wordlist_id, name
+            FROM `LA-wortliste`
+            '''
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
 
 
 if __name__ == "__main__":
