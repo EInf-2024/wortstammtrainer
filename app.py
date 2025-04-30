@@ -44,11 +44,11 @@ def main():
 def exercise_create():
     try:
         # Parameter abfragen
-        wordlist_id = request.args.getlist('wordlist_id', type=int)
+        wordlist_ids = request.args.getlist('wordlist_id')
         personal_pool = request.args.get('personal_pool', type=int)
         student_id = g.get("user_id")
 
-        if not wordlist_id:
+        if not wordlist_ids:
             return jsonify({"error": 1, "message": "wordlist_id parameter is required"}), 400
 
         # Verbindung zur Datenbank
@@ -61,7 +61,7 @@ def exercise_create():
                     WHERE wordlist_id = %s
                     ORDER BY RAND() LIMIT 8
                 '''
-                params = wordlist_id
+                params = wordlist_ids
 
                 cursor.execute(base_query, (params,))
                 result = cursor.fetchall()
@@ -69,15 +69,14 @@ def exercise_create():
             #personal_pool aktiv + student_id benötigt
             elif personal_pool == 1:
 
-                base_query = '''
+                query1 = '''
                     SELECT word_id
                     FROM `LA-fortschritt`
-                    WHERE score < 3 AND student_id = %s
+                    WHERE score < 3 AND student_id = %s 
                     ORDER BY RAND() LIMIT 8
                 '''
-                params = student_id
 
-                cursor.execute(base_query, (params,))
+                cursor.execute(query1, (student_id,))
                 result = cursor.fetchall()
 
                 word_ids = [(row["word_id"]) for row in result]
@@ -85,8 +84,13 @@ def exercise_create():
                 query2 ='''
                     SELECT word_id, name
                     FROM `LA-wörter`
-                    WHERE word_id = ({})
-                '''.format(','.join(['%s'] * len(word_ids)))
+                    WHERE word_id IN ({}) AND wordlist_id IN ({})
+                '''.format(
+                    ','.join(['%s'] * len(word_ids)),
+                    ','.join(['%s'] * len(wordlist_ids))
+                )
+
+                params = tuple(word_ids) + tuple(wordlist_ids)
 
                 cursor.execute(query2, (word_ids,))
                 result = cursor.fetchall()
@@ -249,7 +253,7 @@ def get_student():
                 query = '''
                 SELECT word_id
                 FROM `LA-fortschritt`
-                WHERE word_id = ({}) AND student_id = %s AND score >= 3
+                WHERE word_id IN ({}) AND student_id = %s AND score >= 3
                 '''.format(','.join(['%s'] * len(maxword_ids)))
 
                 cursor.execute(query, (word_ids, student_id))
@@ -298,12 +302,13 @@ def create_wordlist():
             cursor.execute(query, (name,))
             wordlist_id = cursor.lastrowid
 
-            query = '''
-            INSERT INTO 'LA-wörter' (name, wordlist_id)
-            VALUES (({}), %s)
-            '''.format(','.join(['%s'] * len(words)))
+            placeholders = ','.join(['(%s, %s)'] * len(words))
+            params = [(word, wordlist_id) for word in words]
 
-            cursor.execute(query, (words,wordlist_id))
+            query = f'INSERT INTO `LA-wörter` (name, wordlist_id) VALUES {placeholders}'
+
+            cursor.executemany(query, params)
+
         return jsonify({"message":"Wörterliste erfolgreich hinzugefügt"})
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
@@ -336,11 +341,12 @@ def edit_wordlist():
         words = words.split('\n')
 
         with auth.open() as (connection, cursor):
-            query = '''
-            INSERT INTO `LA-wörter` (name, wordlist_id)
-            VALUES (({}), %s)
-            '''.format(','.join(['%s'] * len(words)))
-            cursor.execute(query, (words, wordlist_id))
+
+            placeholders = ','.join(['(%s, %s)'] * len(words))
+            params = [(word, wordlist_id) for word in words]
+
+            query = f'INSERT INTO `LA-wörter` (name, wordlist_id) VALUES {placeholders}'
+            cursor.executemany(query, params)
 
         return jsonify({"message":"Wortliste erfolgreich bearbeitet"})
     except Exception as e:
