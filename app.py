@@ -10,8 +10,7 @@ from auth.auth import cursor
 
 app = Flask(__name__)
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI()
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 class Wort(BaseModel):
     wort: str
