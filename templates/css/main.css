@@ -1,0 +1,59 @@
+
+:root {
+    --primary-color: #4e73df;
+    --secondary-color: #f8f9fc;
+    --text-color: #5a5c69;
+    --light-gray: #dddfeb;
+    --success-color: #1cc88a;
+    --danger-color: #e74a3b;
+}
+
+body {
+    font-family: 'Nunito', sans-serif;
+    color: var(--text-color);
+    background-color: var(--secondary-color);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 15px;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #3a5ccc;
+    border-color: #3a5ccc;
+}
+
+.card {
+    border: none;
+    border-radius: 0.35rem;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+
+.header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+}
+
+
+.navbar {
+    padding: 0.5rem 1rem;
+}
+
+
+.text-success {
+    color: var(--success-color);
+}
+
+.text-danger {
+    color: var(--danger-color);
+}

@@ -1,0 +1,37 @@
+.neumorphic {
+    background: var(--secondary-color);
+    border-radius: 10px;
+    box-shadow:  8px 8px 16px #d9d9d9,
+                -8px -8px 16px #ffffff;
+}
+
+.neumorphic-inset {
+    background: var(--secondary-color);
+    border-radius: 10px;
+    box-shadow: inset 8px 8px 16px #d9d9d9,
+                inset -8px -8px 16px #ffffff;
+}
+
+.neumorphic-btn {
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    background: var(--secondary-color);
+    box-shadow:  5px 5px 10px #d9d9d9,
+                -5px -5px 10px #ffffff;
+    transition: all 0.2s ease;
+}
+
+.neumorphic-btn:active {
+    box-shadow: inset 5px 5px 10px #d9d9d9,
+                inset -5px -5px 10px #ffffff;
+}
+
+.neumorphic-input {
+    border: none;
+    padding: 15px;
+    border-radius: 10px;
+    background: var(--secondary-color);
+    box-shadow: inset 5px 5px 10px #d9d9d9,
+                inset -5px -5px 10px #ffffff;
+}
