@@ -121,7 +121,7 @@ def create_exercise():
                       {"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,
-            response_format=Exercise
+            response_format=Exercise,
         )
 
         response_data = response.choices[0].message.parsed.exercise
@@ -144,10 +144,10 @@ def correct_exercise():
 
         data = request.get_json()
 
-
         prompt = """
         Sie erhalten ein Dictonary von 8 Dictonarys in der Form "word_1": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}, 
         kontrollieren Sie ob die 4 Wörter pro Dictonarys der deklarierten Wortart entsprechen und zum gleichen Stamm gehören.
+        Übernehmen Sie den namen und die word_id und markieren Sie das Attribut correct mit 0 wenn ein Wort falsch ist und mit 1 wenn es richtig ist. 
         Wörter:
         """ + data
 
@@ -163,6 +163,8 @@ def correct_exercise():
 
         response_data = response.choices[0].message.parsed.corrected_words
 
+
+
         wrong = []
         right = []
 
@@ -175,19 +177,22 @@ def correct_exercise():
         right = list(set(right) - set(wrong))
         wrong = list(set(wrong))
 
+        rw = set(right).update(set(wrong))
+        rw = list(rw)
+
+
         with auth.open() as (connection, cursor):
 
             student_id = g.get("user_id")
 
-            # First update
-
-            for word in right:
+            for word_id in rw:
                 testquery = '''
                 SELECT 1
                 FROM `LA-fortschritt`
                 WHERE student_id = %s AND word_id = %s
                 '''
-                cursor.execute(testquery, (student_id, word))
+
+                cursor.execute(testquery, (student_id, word_id))
                 result = cursor.fetchone()
                 cursor.nextset()
 
@@ -197,8 +202,9 @@ def correct_exercise():
                     VALUES (%s, %s, 0)
                     '''
 
-                    cursor.execute(insertquery, (student_id, word))
+                    cursor.execute(insertquery, (student_id, word_id))
 
+            # First update
             query1 = '''
                 UPDATE `LA-fortschritt`
                 SET score = score + 1
@@ -207,24 +213,6 @@ def correct_exercise():
             cursor.execute(query1, (right, student_id))
 
             # Second update
-            for word in wrong:
-                testquery = '''
-                SELECT 1
-                FROM `LA-fortschritt`
-                WHERE student_id = %s AND word_id = %s
-                '''
-                cursor.execute(testquery, (student_id, word))
-                result = cursor.fetchone()
-                cursor.nextset()
-
-                if result is None:
-                    insertquery = '''
-                    INSERT INTO `LA-fortschritt` (student_id, word_id, score)
-                    VALUES (%s, %s, 0)
-                    '''
-
-                    cursor.execute(insertquery, (student_id, word))
-
             query2 = '''
                 UPDATE `LA-fortschritt`
                 SET score = 0
