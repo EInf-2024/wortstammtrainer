@@ -339,6 +339,7 @@ def create_wordlist():
         # "words":  str
         #           str
         #           str
+        #           ...
         # }
         # ein wort pro Zeile
         data = request.get_json()
