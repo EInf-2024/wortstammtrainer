@@ -5,65 +5,78 @@ document.addEventListener('DOMContentLoaded', function() {
     if (classId) {
         loadClassData(classId);
     }
+    setupBackButton();
 });
 
-function loadClassData(classId) {
+async function loadClassData(classId) {
+    try {
+        // Fetch class details
+        const classData = await fetch(`/get_classes?id=${classId}`)
+            .then(res => res.json());
 
-    const classes = {
-        '1': { name: '7a', students: [
-            { id: 1, name: 'Anna Müller', assignments: [
-                { name: 'Grundwortschatz', mastered: 35, total: 50 },
-                { name: 'Verben Konjugation', mastered: 15, total: 30 }
-            ]},
-            { id: 2, name: 'Tom Schneider', assignments: [
-                { name: 'Grundwortschatz', mastered: 40, total: 50 },
-                { name: 'Verben Konjugation', mastered: 10, total: 30 }
-            ]}
-        ]},
-        '2': { name: '8b', students: [
-            { id: 3, name: 'Lisa Bauer', assignments: [
-                { name: 'Grundwortschatz', mastered: 25, total: 50 },
-                { name: 'Verben Konjugation', mastered: 20, total: 30 }
-            ]}
-        ]},
-        '3': { name: '9c', students: [
-            { id: 4, name: 'Paul Weber', assignments: [
-                { name: 'Adjektive', mastered: 15, total: 25 }
-            ]}
-        ]}
-    };
+        // Fetch students in class
+        const students = await fetch(`/get_students?class_id=${classId}`)
+            .then(res => res.json());
 
-    const classData = classes[classId];
-    if (!classData) {
-        window.location.href = '/teacher/teacher.html';
-        return;
+        document.getElementById('className').textContent = `Klasse ${classData.label}`;
+        renderStudents(students);
+
+    } catch (error) {
+        console.error('Failed to load class data:', error);
+        window.location.href = '/teacher/dashboard.html';
     }
+}
 
-    document.getElementById('className').textContent = `Klasse ${classData.name}`;
-
-    const studentList = document.getElementById('studentList');
-    studentList.innerHTML = classData.students.map(student => `
-        <div class="list-group-item">
-            <button class="btn w-100 text-start student-btn" data-student-id="${student.id}">
-                ${student.name}
-            </button>
-            <div class="student-assignments mt-2" id="student-${student.id}" style="display: none;">
-                ${student.assignments.map(assignment => `
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>${assignment.name}</span>
-                        <span>${assignment.mastered}/${assignment.total}</span>
-                    </div>
-                `).join('')}
+function renderStudents(students) {
+    const container = document.getElementById('studentList');
+    container.innerHTML = students.map(student => `
+        <div class="student-card list-group-item">
+            <div class="student-header d-flex justify-content-between align-items-center"
+                 data-id="${student.id}">
+                <span>${student.username}</span>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="student-progress collapse">
+                <!-- Progress will be loaded here -->
             </div>
         </div>
     `).join('');
 
+    // Add click handlers
+    document.querySelectorAll('.student-header').forEach(header => {
+        header.addEventListener('click', async function() {
+            const studentId = this.dataset.id;
+            const progressDiv = this.nextElementSibling;
 
-    document.querySelectorAll('.student-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const studentId = this.dataset.studentId;
-            const assignmentsDiv = document.getElementById(`student-${studentId}`);
-            assignmentsDiv.style.display = assignmentsDiv.style.display === 'none' ? 'block' : 'none';
+            // Toggle collapse
+            const bsCollapse = new bootstrap.Collapse(progressDiv, {
+                toggle: true
+            });
+
+            // Load progress if not already loaded
+            if (!progressDiv.hasAttribute('data-loaded')) {
+                try {
+                    const progress = await fetch(`/get_student?student_id=${studentId}`)
+                        .then(res => res.json());
+
+                    progressDiv.innerHTML = Object.entries(progress).map(([wordlist, score]) => `
+                        <div class="d-flex justify-content-between align-items-center p-2">
+                            <span>${wordlist}</span>
+                            <span>${score}</span>
+                        </div>
+                    `).join('');
+
+                    progressDiv.setAttribute('data-loaded', 'true');
+                } catch (error) {
+                    progressDiv.innerHTML = `<div class="text-danger p-2">Fehler beim Laden</div>`;
+                }
+            }
         });
+    });
+}
+
+function setupBackButton() {
+    document.getElementById('backBtn').addEventListener('click', function() {
+        window.location.href = '/teacher/dashboard.html';
     });
 }

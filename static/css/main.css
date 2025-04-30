@@ -57,3 +57,38 @@ body {
 .text-danger {
     color: var(--danger-color);
 }
+
+
+.student-progress {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: var(--secondary-color);
+    border-radius: 0 0 5px 5px;
+}
+
+
+.training-table {
+    width: 100%;
+    margin-bottom: 20px;
+}
+.training-table td {
+    padding: 12px;
+}
+.training-table td.given {
+    background-color: var(--light-gray);
+    font-weight: bold;
+}
+.training-table td.correct {
+    background-color: var(--success-color);
+    color: white;
+}
+.training-table td.incorrect {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+
+.modal-content {
+    border-radius: 10px;
+}
