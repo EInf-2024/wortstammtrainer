@@ -32,6 +32,9 @@ class CorrectedWordsList(BaseModel):
 
 app.route('/login', methods=['POST'])(auth.login)
 
+@auth.route(app, "/", required_role=["student", "teacher"])
+def index():
+    return render_template("index.html")
 @auth.route(app, "/student", required_role=["student"])
 def student():
     return render_template("student/student.html")
@@ -107,7 +110,7 @@ def create_exercise():
         prompt = f"""
         Sie erhalten französische Wörter in der Form (word_id, name)
         Klassifizieren Sie diese ihrer Wortart:
-        0 = Nomen, 1 = Verb, 2 = Adjektiv, 3 = Adverb, Der word_id Eintrag muss nur in der Antwort weitergegeben werden
+        0 = Nomen, 1 = Verb, 2 = Adjektiv, 3 = Adverb, Der word_id Eintrag muss einfach in der Antwort weitergegeben werden
         Wörter: '{words}'
         """
 
@@ -132,21 +135,21 @@ def correct_exercise():
     try:
 
         # data = {
-        # "word_1": {"word_id": x, "nomen":}
-        # "words":
-        #
-        #
-        #
+        # "word_1": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}
+        # "word_2": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}
+        # "word_3": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}
+        # "word_4": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}
+        # ...
         # }
 
         data = request.get_json()
 
 
-        prompt = f"""
-        Sie erhalten 8x4 Wörter in der Form (word_id, name), kontrollieren Sie immer bei vier Wörtern mit der gleichen 
-        word_id ob diese 4 Wörter jeweils zum gleichen Stamm gehören und markieren sie diese jeweils mit True oder False. 
-        Wörter: {completed_exercise}
-        """
+        prompt = """
+        Sie erhalten ein Dictonary von 8 Dictonarys in der Form "word_1": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}, 
+        kontrollieren Sie ob die 4 Wörter pro Dictonarys der deklarierten Wortart entsprechen und zum gleichen Stamm gehören.
+        Wörter:
+        """ + data
 
         response = client.beta.chat.completions.parse(
             model="gpt-4o-mini",
