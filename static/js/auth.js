@@ -37,9 +37,9 @@ function authenticateUser(username, password) {
 
 
         if (data.role === 'teacher') {
-            window.location.href = '/teacher/dashboard.html';
+            window.location.href = '/teacher/teacher.html';
         } else if (data.role === 'student') {
-            window.location.href = '/student/dashboard.html';
+            window.location.href = '/student/teacher.html';
         }
     })
     .catch(error => {

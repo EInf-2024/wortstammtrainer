@@ -35,7 +35,7 @@ function loadClassData(classId) {
 
     const classData = classes[classId];
     if (!classData) {
-        window.location.href = '/teacher/dashboard.html';
+        window.location.href = '/teacher/teacher.html';
         return;
     }
 

@@ -73,5 +73,5 @@ function loadNextWords() {
 }
 
 function goBack() {
-    window.location.href = '/student/dashboard.html';
+    window.location.href = '/student/teacher.html';
 }
