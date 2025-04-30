@@ -34,11 +34,11 @@ app.route('/login', methods=['POST'])(auth.login)
 
 @auth.route(app, "/student", required_role=["student"])
 def main():
-    return render_template("student.html")
+    return render_template("student/student.html")
 
 @auth.route(app, "/teacher", required_role=["teacher"])
 def main():
-    return render_template("teacher.html")
+    return render_template("teacher/teacher.html")
 
 @auth.route(app,"/create_exercise", required_role=["student"], methods=["POST"])
 def exercise_create():
@@ -285,18 +285,19 @@ def get_wordlists():
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
-@auth.route(app, '/create_wordlist', required_role=["teacher"] , methods=['GET'])
+@auth.route(app, '/create_wordlist', required_role=["teacher"] , methods=['POST'])
 def create_wordlist():
     try:
-        name = request.args.get('name')
-        words = request.args.get('words')
+        data = request.get_json()
+        name = data.get('name')
+        words = data.get('words')
         words = words.split('\n')
 
         with auth.open() as (connection, cursor):
 
             query = '''
             INSERT INTO `LA-wortliste` (name)
-            VALUE %s
+            VALUES (%s)
             '''
 
             cursor.execute(query, (name,))
@@ -317,6 +318,7 @@ def create_wordlist():
 def delete_wordlist():
     try:
         wordlist_id = request.args.get('wordlist_id')
+
         with auth.open() as (connection, cursor):
             query = '''
             DELETE FROM `LA-wortliste`
@@ -333,11 +335,12 @@ def delete_wordlist():
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
-@auth.route(app, '/edit_wordlist', required_role=["teacher"] , methods=['GET'])
+@auth.route(app, '/edit_wordlist', required_role=["teacher"] , methods=['POST'])
 def edit_wordlist():
     try:
-        wordlist_id = request.args.get('wordlist_id')
-        words = request.args.get('words')
+        data = request.get_json()
+        wordlist_id = data.get('wordlist_id')
+        words = data.get('words')
         words = words.split('\n')
 
         with auth.open() as (connection, cursor):
