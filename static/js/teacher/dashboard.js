@@ -35,11 +35,19 @@ async function loadAssignments() {
         assignmentList.innerHTML = assignments.map(assignment => `
             <div class="card mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">${assignment.name}</h5>
-                    <button class="btn btn-primary add-words-btn" 
-                            data-id="${assignment.wordlist_id}">
-                        Wörter hinzufügen
-                    </button>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">${assignment.name}</h5>
+                        <div>
+                            <button class="btn btn-primary btn-sm add-words-btn me-2" 
+                                    data-id="${assignment.wordlist_id}">
+                                Wörter hinzufügen
+                            </button>
+                            <button class="btn btn-danger btn-sm delete-assignment-btn" 
+                                    data-id="${assignment.wordlist_id}">
+                                Löschen
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `).join('');
@@ -50,9 +58,33 @@ async function loadAssignments() {
                 showAddWordsModal(wordlistId);
             });
         });
+
+        document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const wordlistId = this.getAttribute('data-id');
+                deleteAssignment(wordlistId);
+            });
+        });
     } catch (error) {
         console.error('Error loading assignments:', error);
         alert('Fehler beim Laden der Aufgaben');
+    }
+}
+
+async function deleteAssignment(wordlistId) {
+    if (!confirm('Möchten Sie diese Aufgabe wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
+        if (!response.ok) throw new Error('Failed to delete assignment');
+
+        loadAssignments();
+        alert('Aufgabe erfolgreich gelöscht');
+    } catch (error) {
+        console.error('Error deleting assignment:', error);
+        alert('Fehler beim Löschen der Aufgabe');
     }
 }
 
