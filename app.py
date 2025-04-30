@@ -9,13 +9,12 @@ from auth.auth import cursor
 
 app = Flask(__name__)
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI()
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 class Wort(BaseModel):
     wort: str
-    wortart: int  # 0: Nomen, 1: Verb, 2: Adjektiv, 3:Adverb
+    wortart: int        #0: Nomen, 1: Verb, 2: Adjektiv, 3:Adverb
     word_id: int
 
 
@@ -374,10 +373,11 @@ def create_wordlist():
 @auth.route(app, '/delete_wordlist', required_role=["teacher"], methods=['POST'])
 def delete_wordlist():
     try:
-        data = request.get_json()
+
         # {
         # "wordlist_id": int
         # }
+        data = request.get_json()
         wordlist_id = data.get('wordlist_id')
 
         with auth.open() as (connection, cursor):

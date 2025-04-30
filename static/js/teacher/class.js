@@ -1,69 +1,113 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const classId = urlParams.get('id');
-
-    if (classId) {
-        loadClassData(classId);
-    }
+    loadClassStudents();
+    setupLogout();
 });
 
-function loadClassData(classId) {
+async function loadClassStudents() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const classId = urlParams.get('id');
 
-    const classes = {
-        '1': { name: '7a', students: [
-            { id: 1, name: 'Anna Müller', assignments: [
-                { name: 'Grundwortschatz', mastered: 35, total: 50 },
-                { name: 'Verben Konjugation', mastered: 15, total: 30 }
-            ]},
-            { id: 2, name: 'Tom Schneider', assignments: [
-                { name: 'Grundwortschatz', mastered: 40, total: 50 },
-                { name: 'Verben Konjugation', mastered: 10, total: 30 }
-            ]}
-        ]},
-        '2': { name: '8b', students: [
-            { id: 3, name: 'Lisa Bauer', assignments: [
-                { name: 'Grundwortschatz', mastered: 25, total: 50 },
-                { name: 'Verben Konjugation', mastered: 20, total: 30 }
-            ]}
-        ]},
-        '3': { name: '9c', students: [
-            { id: 4, name: 'Paul Weber', assignments: [
-                { name: 'Adjektive', mastered: 15, total: 25 }
-            ]}
-        ]}
-    };
+        if (!classId) {
+            window.location.href = '/teacher';
+            return;
+        }
 
-    const classData = classes[classId];
-    if (!classData) {
-        window.location.href = '/teacher/teacher.html';
-        return;
-    }
+        // Fetch class info
+        const classResponse = await fetch('/get_classes');
+        if (!classResponse.ok) throw new Error('Failed to fetch class info');
+        const classes = await classResponse.json();
+        const currentClass = classes.find(c => c.id == classId);
 
-    document.getElementById('className').textContent = `Klasse ${classData.name}`;
+        if (currentClass) {
+            document.getElementById('className').textContent = currentClass.label;
+        }
 
-    const studentList = document.getElementById('studentList');
-    studentList.innerHTML = classData.students.map(student => `
-        <div class="list-group-item">
-            <button class="btn w-100 text-start student-btn" data-student-id="${student.id}">
-                ${student.name}
-            </button>
-            <div class="student-assignments mt-2" id="student-${student.id}" style="display: none;">
-                ${student.assignments.map(assignment => `
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>${assignment.name}</span>
-                        <span>${assignment.mastered}/${assignment.total}</span>
+        // Fetch students
+        const studentResponse = await fetch(`/get_students?class_id=${classId}`);
+        if (!studentResponse.ok) throw new Error('Failed to fetch students');
+        const students = await studentResponse.json();
+
+        const studentList = document.getElementById('studentList');
+        studentList.innerHTML = students.map(student => `
+            <div class="list-group-item list-group-item-action student-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${student.username}</span>
+                    <button class="btn btn-sm btn-outline-primary toggle-progress-btn">
+                        Fortschritt anzeigen
+                    </button>
+                </div>
+                <div class="student-progress-container mt-2 d-none" data-student-id="${student.id}">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
                     </div>
-                `).join('')}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
 
+        // Add click handlers for progress toggles
+        document.querySelectorAll('.toggle-progress-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const container = this.closest('.student-item').querySelector('.student-progress-container');
+                const studentId = container.getAttribute('data-student-id');
 
-    document.querySelectorAll('.student-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const studentId = this.dataset.studentId;
-            const assignmentsDiv = document.getElementById(`student-${studentId}`);
-            assignmentsDiv.style.display = assignmentsDiv.style.display === 'none' ? 'block' : 'none';
+                if (container.classList.contains('d-none')) {
+                    await loadStudentProgress(studentId, container);
+                }
+
+                container.classList.toggle('d-none');
+                this.textContent = container.classList.contains('d-none')
+                    ? 'Fortschritt anzeigen'
+                    : 'Fortschritt verbergen';
+            });
         });
+    } catch (error) {
+        console.error('Error loading class students:', error);
+        alert('Fehler beim Laden der Schüler');
+        window.location.href = '/teacher';
+    }
+}
+
+async function loadStudentProgress(studentId, container) {
+    try {
+        const response = await fetch(`/get_student?student_id=${studentId}`);
+        if (!response.ok) throw new Error('Failed to fetch progress');
+
+        const progress = await response.json();
+
+        if (!progress || Object.keys(progress).length === 0) {
+            container.innerHTML = '<div class="text-center py-3">Keine Fortschrittsdaten verfügbar</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="list-group">
+                ${Object.entries(progress).map(([wordlistId, progressStr]) => {
+                    const [mastered, total] = progressStr.split('/').map(Number);
+                    const percentage = total > 0 ? Math.round((mastered / total) * 100) : 0;
+                    return `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <span>Aufgabe ${wordlistId}</span>
+                                <span>${progressStr}</span>
+                            </div>
+                            <div class="progress mt-2">
+                                <div class="progress-bar" style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading student progress:', error);
+        container.innerHTML = '<div class="text-center py-3 text-danger">Fehler beim Laden des Fortschritts</div>';
+    }
+}
+
+function setupLogout() {
+    document.querySelector('.logout-btn').addEventListener('click', function() {
+        document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/';
     });
 }
