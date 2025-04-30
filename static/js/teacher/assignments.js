@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadAssignments() {
     try {
         const response = await fetch('/get_wordlists');
-        if (!response.ok) throw new Error('Failed to fetch assignments');
+        if (!response.ok) throw new Error('Aufgaben konnten nicht geladen werden');
 
         const assignments = await response.json();
         const tableBody = document.getElementById('assignmentTable');
@@ -47,7 +47,7 @@ async function loadAssignments() {
             });
         });
     } catch (error) {
-        console.error('Error loading assignments:', error);
+        console.error('Fehler beim Laden:', error);
         alert('Fehler beim Laden der Aufgaben');
     }
 }
@@ -55,11 +55,11 @@ async function loadAssignments() {
 async function deleteAssignment(wordlistId) {
     try {
         const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
-        if (!response.ok) throw new Error('Failed to delete assignment');
+        if (!response.ok) throw new Error('Löschen fehlgeschlagen');
 
         loadAssignments();
     } catch (error) {
-        console.error('Error deleting assignment:', error);
+        console.error('Löschfehler:', error);
         alert('Fehler beim Löschen der Aufgabe');
     }
 }
@@ -68,9 +68,10 @@ function showAddWordsModal(wordlistId) {
     const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
     document.getElementById('wordlistId').value = wordlistId;
 
-    // Load existing assignment name if editing
-    if (wordlistId) {
-        document.getElementById('wordlistName').value = document.querySelector(`[data-id="${wordlistId}"]`).closest('tr').querySelector('td:first-child').textContent;
+    // Load existing name if editing
+    const assignmentRow = document.querySelector(`[data-id="${wordlistId}"]`)?.closest('tr');
+    if (assignmentRow) {
+        document.getElementById('wordlistName').value = assignmentRow.querySelector('td:first-child').textContent;
     } else {
         document.getElementById('wordlistName').value = '';
     }
@@ -90,33 +91,48 @@ function setupModals() {
 
     document.getElementById('saveWordlist').addEventListener('click', async function() {
         const wordlistId = document.getElementById('wordlistId').value;
-        const name = document.getElementById('wordlistName').value;
-        const words = document.getElementById('wordlistWords').value;
+        const name = document.getElementById('wordlistName').value.trim();
+        const wordsText = document.getElementById('wordlistWords').value.trim();
 
-        if (!name || !words) {
-            alert('Bitte füllen Sie alle Felder aus');
+        if (!name) {
+            alert('Bitte geben Sie einen Namen ein');
             return;
         }
+
+        if (!wordsText) {
+            alert('Bitte geben Sie Wörter ein');
+            return;
+        }
+
+        const words = wordsText.split('\n')
+            .map(w => w.trim())
+            .filter(w => w.length > 0);
 
         try {
             const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({
-                    wordlist_id: wordlistId || null,
-                    name,
-                    words
+                    name: name,
+                    words: words
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to save wordlist');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Server-Fehler');
+            }
 
             modal.hide();
             loadAssignments();
+            alert('Erfolgreich gespeichert');
         } catch (error) {
-            console.error('Error saving wordlist:', error);
-            alert('Fehler beim Speichern der Wortliste');
+            console.error('Speicherfehler:', error);
+            alert(`Fehler: ${error.message}`);
         }
     });
 }

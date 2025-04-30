@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function loadClasses() {
     try {
         const response = await fetch('/get_classes');
-        if (!response.ok) throw new Error('Failed to fetch classes');
+        if (!response.ok) throw new Error('Klassen konnten nicht geladen werden');
 
         const classes = await response.json();
         const classList = document.getElementById('classList');
@@ -19,7 +19,7 @@ async function loadClasses() {
             </a>
         `).join('');
     } catch (error) {
-        console.error('Error loading classes:', error);
+        console.error('Fehler beim Laden der Klassen:', error);
         alert('Fehler beim Laden der Klassen');
     }
 }
@@ -27,7 +27,7 @@ async function loadClasses() {
 async function loadAssignments() {
     try {
         const response = await fetch('/get_wordlists');
-        if (!response.ok) throw new Error('Failed to fetch assignments');
+        if (!response.ok) throw new Error('Aufgaben konnten nicht geladen werden');
 
         const assignments = await response.json();
         const assignmentList = document.getElementById('assignmentList');
@@ -66,7 +66,7 @@ async function loadAssignments() {
             });
         });
     } catch (error) {
-        console.error('Error loading assignments:', error);
+        console.error('Fehler beim Laden der Aufgaben:', error);
         alert('Fehler beim Laden der Aufgaben');
     }
 }
@@ -78,12 +78,12 @@ async function deleteAssignment(wordlistId) {
 
     try {
         const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
-        if (!response.ok) throw new Error('Failed to delete assignment');
+        if (!response.ok) throw new Error('Löschen fehlgeschlagen');
 
         loadAssignments();
         alert('Aufgabe erfolgreich gelöscht');
     } catch (error) {
-        console.error('Error deleting assignment:', error);
+        console.error('Fehler beim Löschen:', error);
         alert('Fehler beim Löschen der Aufgabe');
     }
 }
@@ -97,43 +97,59 @@ function showAddWordsModal(wordlistId) {
 }
 
 function setupModals() {
-    const newWordlistModal = new bootstrap.Modal(document.getElementById('wordlistModal'));
+    const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
 
     document.getElementById('newWordlistBtn').addEventListener('click', function() {
         document.getElementById('wordlistForm').reset();
         document.getElementById('wordlistId').value = '';
-        newWordlistModal.show();
+        modal.show();
     });
 
     document.getElementById('saveWordlist').addEventListener('click', async function() {
         const wordlistId = document.getElementById('wordlistId').value;
-        const name = document.getElementById('wordlistName').value;
-        const words = document.getElementById('wordlistWords').value;
+        const name = document.getElementById('wordlistName').value.trim();
+        const wordsText = document.getElementById('wordlistWords').value.trim();
 
-        if (!name || !words) {
-            alert('Bitte füllen Sie alle Felder aus');
+        if (!name) {
+            alert('Bitte geben Sie einen Namen für die Aufgabe ein');
             return;
         }
+
+        if (!wordsText) {
+            alert('Bitte geben Sie mindestens ein Wort ein');
+            return;
+        }
+
+        const words = wordsText.split('\n')
+            .map(w => w.trim())
+            .filter(w => w.length > 0);
 
         try {
             const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({
-                    wordlist_id: wordlistId || null,
-                    name,
-                    words
+                    name: name,
+                    words: words
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to save wordlist');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Server-Fehler');
+            }
 
-            newWordlistModal.hide();
+            const result = await response.json();
+            modal.hide();
             loadAssignments();
+            alert(result.message || 'Erfolgreich gespeichert');
         } catch (error) {
-            console.error('Error saving wordlist:', error);
-            alert('Fehler beim Speichern der Wortliste');
+            console.error('Speicherfehler:', error);
+            alert(`Fehler beim Speichern: ${error.message}`);
         }
     });
 }
