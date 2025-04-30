@@ -90,18 +90,19 @@ function setupModals() {
     document.getElementById('saveWordlist').addEventListener('click', async function() {
         const wordlistId = document.getElementById('wordlistId').value;
         const name = document.getElementById('wordlistName').value.trim();
-        const words = document.getElementById('wordlistWords').value.trim();
+        const wordsText = document.getElementById('wordlistWords').value.trim();
 
-        if (!name || !words) {
-            alert('Bitte alle Felder ausfüllen');
+        if (!name) {
+            alert('Bitte Namen eingeben');
             return;
         }
 
-        // Fix for 500 error - ensure proper data format
-        const wordArray = words.split('\n')
-            .map(w => w.trim())
-            .filter(w => w.length > 0);
+        if (!wordsText) {
+            alert('Bitte Wörter eingeben');
+            return;
+        }
 
+        // Send as raw text instead of array
         try {
             const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
             const response = await fetch(endpoint, {
@@ -111,20 +112,20 @@ function setupModals() {
                 },
                 body: JSON.stringify({
                     name: name,
-                    words: wordArray  // Send as array, not string
+                    words: wordsText  // Send as raw text, not array
                 })
             });
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.message || 'Fehler beim Speichern');
+                throw new Error(error.message || 'Server error');
             }
 
-            modal.hide();
-            loadAssignments();
+            alert('Erfolgreich gespeichert');
+            location.reload();
         } catch (error) {
-            console.error('Fehler:', error);
-            alert(error.message || 'Speichern fehlgeschlagen');
+            console.error('Error:', error);
+            alert('Fehler: ' + error.message);
         }
     });
 }
