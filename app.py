@@ -33,11 +33,11 @@ class CorrectedWordsList(BaseModel):
 app.route('/login', methods=['POST'])(auth.login)
 
 @auth.route(app, "/student", required_role=["student"])
-def main():
+def student():
     return render_template("student/student.html")
 
 @auth.route(app, "/teacher", required_role=["teacher"])
-def main():
+def teacher():
     return render_template("teacher/teacher.html")
 
 @auth.route(app,"/create_exercise", required_role=["student"], methods=["POST"])
@@ -354,6 +354,8 @@ def edit_wordlist():
         return jsonify({"message":"Wortliste erfolgreich bearbeitet"})
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
