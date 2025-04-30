@@ -32,7 +32,7 @@ class CorrectedWordsList(BaseModel):
 
 app.route('/login', methods=['POST'])(auth.login)
 
-@auth.route(app, "/", required_role=["student", "teacher"])
+@app.route("/")
 def index():
     return render_template("index.html")
 @auth.route(app, "/student", required_role=["student"])
