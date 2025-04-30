@@ -5,9 +5,8 @@ from dotenv import load_dotenv
 import openai
 from pydantic import BaseModel
 from typing import List, Dict
-
 import auth
-
+from auth.auth import cursor
 
 app = Flask(__name__)
 load_dotenv()
@@ -73,7 +72,7 @@ def exercise_create():
                 base_query = '''
                     SELECT word_id
                     FROM `LA-fortschritt`
-                    WHERE score < 5 AND student_id = %s
+                    WHERE score < 3 AND student_id = %s
                     ORDER BY RAND() LIMIT 8
                 '''
                 params = student_id
@@ -114,8 +113,9 @@ def exercise_create():
             response_format=Exercise,
         )
 
-        response_data = response.choices[0].message.content
-        return jsonify(Exercise.model_validate_json(response_data).model_dump())
+        response_data = response.choices[0].message.parsed.exercise
+
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({"error": 1, "message": f"Fehler beim Abrufen der Aktivitätsdetails: {str(e)}"})
 
@@ -155,21 +155,23 @@ def exercise_correct():
 
         with auth.open() as (connection, cursor):
 
+            student_id = g.get("user_id")
+
             # First update
             query1 = '''
                 UPDATE `LA-fortschritt`
                 SET score = score + 1
-                WHERE word_id IN ({})
+                WHERE word_id IN ({}) AND student_id = %s 
             '''.format(','.join(['%s'] * len(right)))
-            cursor.execute(query1, right)
+            cursor.execute(query1, (right, student_id))
 
             # Second update
             query2 = '''
                 UPDATE `LA-fortschritt`
-                SET score = score - 1
-                WHERE word_id IN ({})
+                SET score = 0
+                WHERE word_id IN ({}) AND student_id = %s
             '''.format(','.join(['%s'] * len(wrong)))
-            cursor.execute(query2, wrong)
+            cursor.execute(query2, (wrong, student_id))
 
         return jsonify(response_data)
     except Exception as e:
@@ -211,10 +213,63 @@ def get_students():
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
+@auth.route(app,'/get_student',required_role=["teacher"] , methods=['GET'])
+def get_student():
+    try:
+        with auth.open() as (connection, cursor):
+            student_id = g.get("user_id")
+
+            query = '''
+            SELECT wordlist_id
+            FROM `LA-wörter`
+            '''
+
+            cursor.execute(query,)
+            result = cursor.fetchall()
+
+            wordlist_ids = [(row["wordlist_id"]) for row in result]
+
+            prog = {}
+
+            for wordlist_id in wordlist_ids:
+
+                query = '''
+                SELECT word_id
+                FROM `LA-wörter`
+                WHERE wordlist_id = %s
+                '''
+
+                cursor.execute(query, (wordlist_id,))
+                result = cursor.fetchall()
+
+                maxword_ids = [(row["word_id"]) for row in result]
+
+                max = len(maxword_ids)
+
+                query = '''
+                SELECT word_id
+                FROM `LA-fortschritt`
+                WHERE word_id = ({}) AND student_id = %s AND score >= 3
+                '''.format(','.join(['%s'] * len(maxword_ids)))
+
+                cursor.execute(query, (word_ids, student_id))
+                result = cursor.fetchall()
+
+                word_ids = [(row["word_id"]) for row in result]
+
+                reached = len(word_ids)
+
+                prog[wordlist_id] = f"{reached}/{max}"
+
+        return jsonify(prog)
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
+
 @auth.route(app, '/get_wordlists', required_role=["teacher", "student"] , methods=['GET'])
 def get_wordlists():
     try:
         with auth.open() as (connection, cursor):
+
             query = '''
             SELECT wordlist_id, name
             FROM `LA-wortliste`
@@ -226,6 +281,70 @@ def get_wordlists():
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
+@auth.route(app, '/create_wordlist', required_role=["teacher"] , methods=['GET'])
+def create_wordlist():
+    try:
+        name = request.args.get('name')
+        words = request.args.get('words')
+        words = words.split('\n')
+
+        with auth.open() as (connection, cursor):
+
+            query = '''
+            INSERT INTO `LA-wortliste` (name)
+            VALUE %s
+            '''
+
+            cursor.execute(query, (name,))
+            wordlist_id = cursor.lastrowid
+
+            query = '''
+            INSERT INTO 'LA-wörter' (name, wordlist_id)
+            VALUES (({}), %s)
+            '''.format(','.join(['%s'] * len(words)))
+
+            cursor.execute(query, (words,wordlist_id))
+        return jsonify({"message":"Wörterliste erfolgreich hinzugefügt"})
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
+
+@auth.route(app, '/delete_wordlist', required_role=["teacher"] , methods=['GET'])
+def delete_wordlist():
+    try:
+        wordlist_id = request.args.get('wordlist_id')
+        with auth.open() as (connection, cursor):
+            query = '''
+            DELETE FROM `LA-wortliste`
+            WHERE wordlist_id = %s
+            '''
+            cursor.execute(query, (wordlist_id,))
+
+            query = '''
+            DELETE FROM `LA-wörter`
+            WHERE wordlist_id = %s
+            '''
+            cursor.execute(query, (wordlist_id,))
+        return jsonify({"message":"Wortliste erfoglreich entfernt"})
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
+
+@auth.route(app, '/edit_wordlist', required_role=["teacher"] , methods=['GET'])
+def edit_wordlist():
+    try:
+        wordlist_id = request.args.get('wordlist_id')
+        words = request.args.get('words')
+        words = words.split('\n')
+
+        with auth.open() as (connection, cursor):
+            query = '''
+            INSERT INTO `LA-wörter` (name, wordlist_id)
+            VALUES (({}), %s)
+            '''.format(','.join(['%s'] * len(words)))
+            cursor.execute(query, (words, wordlist_id))
+
+        return jsonify({"message":"Wortliste erfolgreich bearbeitet"})
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
