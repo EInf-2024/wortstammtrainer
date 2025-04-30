@@ -41,11 +41,18 @@ def teacher():
     return render_template("teacher/teacher.html")
 
 @auth.route(app,"/create_exercise", required_role=["student"], methods=["POST"])
-def exercise_create():
+def create_exercise():
     try:
         # Parameter abfragen
-        wordlist_ids = request.args.getlist('wordlist_id')
-        personal_pool = request.args.get('personal_pool', type=int)
+
+        # data = {
+        # "wordlist_ids": [],
+        # "personal pool": 0 or 1
+        # }
+
+        data = request.get_json()
+        wordlist_ids = data.getlist('wordlist_ids')
+        personal_pool = data.get('personal_pool', type=int)
         student_id = g.get("user_id")
 
         if not wordlist_ids:
@@ -61,9 +68,8 @@ def exercise_create():
                     WHERE wordlist_id = %s
                     ORDER BY RAND() LIMIT 8
                 '''
-                params = wordlist_ids
 
-                cursor.execute(base_query, (params,))
+                cursor.execute(base_query, (wordlist_ids[0],))
                 result = cursor.fetchall()
 
             #personal_pool aktiv + student_id benötigt
@@ -90,9 +96,7 @@ def exercise_create():
                     ','.join(['%s'] * len(wordlist_ids))
                 )
 
-                params = tuple(word_ids) + tuple(wordlist_ids)
-
-                cursor.execute(query2, (word_ids,))
+                cursor.execute(query2, (word_ids, wordlist_ids))
                 result = cursor.fetchall()
 
             else:
@@ -110,11 +114,11 @@ def exercise_create():
         response = client.beta.chat.completions.parse(
             model="gpt-4o-mini",
             messages=[{"role": "system",
-                       "content": "Sie sind ein hilfreicher Assistent, der strukturierte JSON-Daten generiert."},
+                       "content": "Sie sind ein hilfreicher Assistent, der Wortarten bestimmt."},
                       {"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,
-            response_format=Exercise,
+            response_format=Exercise
         )
 
         response_data = response.choices[0].message.parsed.exercise
@@ -123,10 +127,20 @@ def exercise_create():
     except Exception as e:
         return jsonify({"error": 1, "message": f"Fehler beim Abrufen der Aktivitätsdetails: {str(e)}"})
 
-@auth.route(app, "/correct_exercise", required_role=["student"])
-def exercise_correct():
+@auth.route(app, "/correct_exercise", required_role=["student"], methods=["POST"])
+def correct_exercise():
     try:
-        completed_exercise = request.args.get("completed_exercise", "")
+
+        # data = {
+        # "word_1": {"word_id": x, "nomen":}
+        # "words":
+        #
+        #
+        #
+        # }
+
+        data = request.get_json()
+
 
         prompt = f"""
         Sie erhalten 8x4 Wörter in der Form (word_id, name), kontrollieren Sie immer bei vier Wörtern mit der gleichen 
@@ -150,18 +164,38 @@ def exercise_correct():
         right = []
 
         for i in response_data:
-            if i.correct == False:
+            if i.correct == 0:
                 wrong.append(i.word_id)
-            if i.correct == True:
+            if i.correct == 1:
                 right.append(i.word_id)
 
         right = list(set(right) - set(wrong))
+        wrong = list(set(wrong))
 
         with auth.open() as (connection, cursor):
 
             student_id = g.get("user_id")
 
             # First update
+
+            for word in right:
+                testquery = '''
+                SELECT 1
+                FROM `LA-fortschritt`
+                WHERE student_id = %s AND word_id = %s
+                '''
+                cursor.execute(testquery, (student_id, word))
+                result = cursor.fetchone()
+                cursor.nextset()
+
+                if result is None:
+                    insertquery = '''
+                    INSERT INTO `LA-fortschritt` (student_id, word_id, score)
+                    VALUES (%s, %s, 0)
+                    '''
+
+                    cursor.execute(insertquery, (student_id, word))
+
             query1 = '''
                 UPDATE `LA-fortschritt`
                 SET score = score + 1
@@ -170,6 +204,24 @@ def exercise_correct():
             cursor.execute(query1, (right, student_id))
 
             # Second update
+            for word in wrong:
+                testquery = '''
+                SELECT 1
+                FROM `LA-fortschritt`
+                WHERE student_id = %s AND word_id = %s
+                '''
+                cursor.execute(testquery, (student_id, word))
+                result = cursor.fetchone()
+                cursor.nextset()
+
+                if result is None:
+                    insertquery = '''
+                    INSERT INTO `LA-fortschritt` (student_id, word_id, score)
+                    VALUES (%s, %s, 0)
+                    '''
+
+                    cursor.execute(insertquery, (student_id, word))
+
             query2 = '''
                 UPDATE `LA-fortschritt`
                 SET score = 0
@@ -295,20 +347,22 @@ def create_wordlist():
 
         with auth.open() as (connection, cursor):
 
-            query = '''
+            query1 = '''
             INSERT INTO `LA-wortliste` (name)
             VALUES (%s)
             '''
 
-            cursor.execute(query, (name,))
+            cursor.execute(query1, (name,))
             wordlist_id = cursor.lastrowid
 
             placeholders = ','.join(['(%s, %s)'] * len(words))
             params = [(word, wordlist_id) for word in words]
 
-            query = f'INSERT INTO `LA-wörter` (name, wordlist_id) VALUES {placeholders}'
+            query2 = f'INSERT INTO `LA-wörter` (name, wordlist_id) VALUES {placeholders}'
 
-            cursor.executemany(query, params)
+            cursor.executemany(query2, params)
+
+            query3 = f''
 
         return jsonify({"message":"Wörterliste erfolgreich hinzugefügt"})
     except Exception as e:
