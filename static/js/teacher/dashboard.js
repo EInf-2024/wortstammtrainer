@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupLogout();
 });
 
+// Load teacher's classes
 async function loadClasses() {
     try {
         const response = await fetch('/get_classes');
@@ -19,11 +20,12 @@ async function loadClasses() {
             </a>
         `).join('');
     } catch (error) {
-        console.error('Fehler:', error);
-        alert('Klassen konnten nicht geladen werden');
+        console.error('Fehler beim Laden der Klassen:', error);
+        alert('Fehler beim Laden der Klassen');
     }
 }
 
+// Load all assignments
 async function loadAssignments() {
     try {
         const response = await fetch('/get_wordlists');
@@ -38,12 +40,12 @@ async function loadAssignments() {
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">${assignment.name}</h5>
                         <div>
-                            <button class="btn btn-primary btn-sm me-2" 
-                                    onclick="editAssignment('${assignment.wordlist_id}', '${assignment.name.replace(/'/g, "\\'")}')">
-                                Bearbeiten
+                            <button class="btn btn-primary btn-sm me-2 add-words-btn" 
+                                    data-id="${assignment.wordlist_id}">
+                                Wörter hinzufügen
                             </button>
-                            <button class="btn btn-danger btn-sm" 
-                                    onclick="deleteAssignment('${assignment.wordlist_id}')">
+                            <button class="btn btn-danger btn-sm delete-assignment-btn" 
+                                    data-id="${assignment.wordlist_id}">
                                 Löschen
                             </button>
                         </div>
@@ -51,58 +53,79 @@ async function loadAssignments() {
                 </div>
             </div>
         `).join('');
+
+        // Add event listeners
+        document.querySelectorAll('.add-words-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                showAddWordsModal(this.getAttribute('data-id'));
+            });
+        });
+
+        document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                deleteAssignment(this.getAttribute('data-id'));
+            });
+        });
     } catch (error) {
-        console.error('Fehler:', error);
-        alert('Aufgaben konnten nicht geladen werden');
+        console.error('Fehler beim Laden der Aufgaben:', error);
+        alert('Fehler beim Laden der Aufgaben');
     }
 }
 
+// Delete an assignment
 async function deleteAssignment(wordlistId) {
-    if (!confirm('Wirklich löschen?')) return;
+    if (!confirm('Möchten Sie diese Aufgabe wirklich löschen?')) return;
 
     try {
         const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
         if (!response.ok) throw new Error('Löschen fehlgeschlagen');
+
         loadAssignments();
+        alert('Aufgabe erfolgreich gelöscht');
     } catch (error) {
-        console.error('Fehler:', error);
-        alert('Löschen fehlgeschlagen');
+        console.error('Fehler beim Löschen:', error);
+        alert('Fehler beim Löschen der Aufgabe');
     }
 }
 
-function editAssignment(wordlistId, name) {
+// Show modal for adding/editing words
+function showAddWordsModal(wordlistId) {
     const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
-    document.getElementById('wordlistId').value = wordlistId;
-    document.getElementById('wordlistName').value = name;
+    document.getElementById('wordlistId').value = wordlistId || '';
+    document.getElementById('wordlistName').value = wordlistId
+        ? document.querySelector(`[data-id="${wordlistId}"]`).closest('.card').querySelector('.card-title').textContent
+        : '';
     document.getElementById('wordlistWords').value = '';
     modal.show();
 }
 
+// Setup modal interactions
 function setupModals() {
     const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
 
-    document.getElementById('newWordlistBtn').addEventListener('click', function() {
-        document.getElementById('wordlistForm').reset();
-        document.getElementById('wordlistId').value = '';
-        modal.show();
-    });
+    document.getElementById('newWordlistBtn').addEventListener('click', () => showAddWordsModal());
 
     document.getElementById('saveWordlist').addEventListener('click', async function() {
         const wordlistId = document.getElementById('wordlistId').value;
         const name = document.getElementById('wordlistName').value.trim();
         const wordsText = document.getElementById('wordlistWords').value.trim();
 
+        // Validation
         if (!name) {
-            alert('Bitte Namen eingeben');
+            alert('Bitte geben Sie einen Namen ein');
             return;
         }
 
         if (!wordsText) {
-            alert('Bitte Wörter eingeben');
+            alert('Bitte geben Sie Wörter ein');
             return;
         }
 
-        // Send as raw text instead of array
+        // Prepare data for backend
+        const words = wordsText.split('\n')
+            .map(w => w.trim())
+            .filter(w => w.length > 0);
+
         try {
             const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
             const response = await fetch(endpoint, {
@@ -112,31 +135,30 @@ function setupModals() {
                 },
                 body: JSON.stringify({
                     name: name,
-                    words: wordsText  // Send as raw text, not array
+                    words: words,
+                    ...(wordlistId && { wordlist_id: wordlistId }) // Only include if editing
                 })
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Server error');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Server-Fehler');
             }
 
+            modal.hide();
+            loadAssignments();
             alert('Erfolgreich gespeichert');
-            location.reload();
         } catch (error) {
-            console.error('Error:', error);
-            alert('Fehler: ' + error.message);
+            console.error('Speicherfehler:', error);
+            alert(`Fehler: ${error.message}`);
         }
     });
 }
 
+// Logout handler
 function setupLogout() {
     document.querySelector('.logout-btn').addEventListener('click', function() {
         document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.location.href = '/';
     });
 }
-
-// Make functions global for inline handlers
-window.deleteAssignment = deleteAssignment;
-window.editAssignment = editAssignment;
