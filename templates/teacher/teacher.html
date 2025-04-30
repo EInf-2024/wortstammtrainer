@@ -15,29 +15,61 @@
             <div class="d-flex justify-content-between align-items-center">
                 <h1>Lehrer Dashboard</h1>
                 <div>
-                    <a href='teacher.html' class="btn btn-outline-light me-2">Dashboard</a>
+                    <a href="assignments.html" class="btn btn-outline-light me-2">Aufgabenverwaltung</a>
                     <button class="btn btn-outline-light logout-btn">Abmelden</button>
                 </div>
             </div>
         </div>
     </header>
 
-    <div class="modal fade" id="wordlistModal">
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card neumorphic mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="card-title mb-0">Alle Aufgaben</h2>
+                            <button class="btn btn-primary" id="newWordlistBtn">
+                                Neue Aufgabe
+                            </button>
+                        </div>
+                        <div id="assignmentList">
+                            <!-- Will be filled by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card neumorphic">
+                    <div class="card-body">
+                        <h2 class="card-title mb-3">Meine Klassen</h2>
+                        <div class="list-group" id="classList">
+                            <!-- Will be filled by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Wordlist Modal -->
+    <div class="modal fade" id="wordlistModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Neue Wortliste</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="wordlistForm">
+                        <input type="hidden" id="wordlistId">
                         <div class="mb-3">
-                            <label class="form-label">Name</label>
-                            <input type="text" class="form-control" required>
+                            <label class="form-label">Name der Aufgabe</label>
+                            <input type="text" class="form-control" id="wordlistName" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Wörter (ein Wort pro Zeile)</label>
-                            <textarea class="form-control" rows="8" required></textarea>
+                            <label class="form-label">Französische Wörter (ein Wort pro Zeile)</label>
+                            <textarea class="form-control" id="wordlistWords" rows="8" required></textarea>
                         </div>
                     </form>
                 </div>
@@ -50,6 +82,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/teacher/dashboard.js') }}"></script> <!-- <script src="../static/js/auth.js"></script>
+    <script src="{{ url_for('static', filename='js/teacher/dashboard.js') }}"></script>
 </body>
 </html>

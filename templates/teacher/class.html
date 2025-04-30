@@ -13,9 +13,9 @@
     <header class="header">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
-                <h1>Lehrer Dashboard</h1>
+                <h1>Klassenansicht</h1>
                 <div>
-                    <a href='teacher.html' class="btn btn-outline-light me-2">Dashboard</a>
+                    <a href="teacher.html" class="btn btn-outline-light me-2">Dashboard</a>
                     <button class="btn btn-outline-light logout-btn">Abmelden</button>
                 </div>
             </div>
@@ -24,7 +24,7 @@
 
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 id="className">Klasse 7a</h2>
+            <h2 id="className">Klasse</h2>
             <a href="teacher.html" class="btn btn-secondary">Zurück</a>
         </div>
 
@@ -39,6 +39,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/teacher/class.js') }}"></script> <!-- <script src="../static/js/auth.js"></script>
+    <script src="{{ url_for('static', filename='js/teacher/class.js') }}"></script>
 </body>
 </html>

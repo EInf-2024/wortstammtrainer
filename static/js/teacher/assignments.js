@@ -1,66 +1,112 @@
 document.addEventListener('DOMContentLoaded', function() {
-    loadWordlists();
-    setupModal();
+    loadAssignments();
+    setupModals();
+    setupLogout();
 });
 
-async function loadWordlists() {
-    const wordlists = await fetch('/get_wordlists')
-        .then(res => res.json());
+async function loadAssignments() {
+    try {
+        const response = await fetch('/get_wordlists');
+        if (!response.ok) throw new Error('Failed to fetch assignments');
 
-    const tbody = document.querySelector('#assignmentsTable tbody');
-    tbody.innerHTML = wordlists.map(wl => `
-        <tr data-id="${wl.wordlist_id}">
-            <td>${wl.name}</td>
-            <td>${wl.word_count || 0}</td>
-            <td>
-                <button class="btn btn-sm btn-primary edit-btn">Bearbeiten</button>
-                <button class="btn btn-sm btn-danger delete-btn">Löschen</button>
-            </td>
-        </tr>
-    `).join('');
+        const assignments = await response.json();
+        const tableBody = document.getElementById('assignmentTable');
+
+        tableBody.innerHTML = assignments.map(assignment => `
+            <tr>
+                <td>${assignment.name}</td>
+                <td>${assignment.word_count || 0}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary add-words-btn" 
+                            data-id="${assignment.wordlist_id}">
+                        Wörter hinzufügen
+                    </button>
+                    <button class="btn btn-sm btn-danger delete-assignment-btn" 
+                            data-id="${assignment.wordlist_id}">
+                        Löschen
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        document.querySelectorAll('.add-words-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const wordlistId = this.getAttribute('data-id');
+                showAddWordsModal(wordlistId);
+            });
+        });
+
+        document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const wordlistId = this.getAttribute('data-id');
+                if (confirm('Möchten Sie diese Aufgabe wirklich löschen?')) {
+                    deleteAssignment(wordlistId);
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error loading assignments:', error);
+        alert('Fehler beim Laden der Aufgaben');
+    }
 }
 
-function setupModal() {
-    const modal = new bootstrap.Modal('#wordlistModal');
+async function deleteAssignment(wordlistId) {
+    try {
+        const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
+        if (!response.ok) throw new Error('Failed to delete assignment');
 
-    // New wordlist
-    document.getElementById('newWordlistBtn').addEventListener('click', () => {
+        loadAssignments();
+    } catch (error) {
+        console.error('Error deleting assignment:', error);
+        alert('Fehler beim Löschen der Aufgabe');
+    }
+}
+
+function setupModals() {
+    const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
+
+    document.getElementById('newAssignmentBtn').addEventListener('click', function() {
         document.getElementById('wordlistForm').reset();
+        document.getElementById('wordlistId').value = '';
         modal.show();
     });
 
-    // Edit wordlist
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const wordlistId = this.closest('tr').dataset.id;
-            const wordlist = await fetch(`/get_wordlist?id=${wordlistId}`)
-                .then(res => res.json());
-
-            document.getElementById('wordlistId').value = wordlistId;
-            document.getElementById('wordlistName').value = wordlist.name;
-            document.getElementById('wordlistWords').value = wordlist.words.join('\n');
-            modal.show();
-        });
-    });
-
-    // Save wordlist
     document.getElementById('saveWordlist').addEventListener('click', async function() {
-        const form = document.getElementById('wordlistForm');
-        const wordlistId = form.wordlistId.value;
-        const method = wordlistId ? 'POST' : 'PUT';
-        const url = wordlistId ? '/edit_wordlist' : '/create_wordlist';
+        const wordlistId = document.getElementById('wordlistId').value;
+        const name = document.getElementById('wordlistName').value;
+        const words = document.getElementById('wordlistWords').value;
 
-        await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                wordlist_id: wordlistId,
-                name: form.wordlistName.value,
-                words: form.wordlistWords.value.split('\n')
-            })
-        });
+        if (!name || !words) {
+            alert('Bitte füllen Sie alle Felder aus');
+            return;
+        }
 
-        modal.hide();
-        loadWordlists();
+        try {
+            const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    wordlist_id: wordlistId || null,
+                    name,
+                    words
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to save wordlist');
+
+            modal.hide();
+            loadAssignments();
+        } catch (error) {
+            console.error('Error saving wordlist:', error);
+            alert('Fehler beim Speichern der Wortliste');
+        }
+    });
+}
+
+function setupLogout() {
+    document.querySelector('.logout-btn').addEventListener('click', function() {
+        document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/';
     });
 }

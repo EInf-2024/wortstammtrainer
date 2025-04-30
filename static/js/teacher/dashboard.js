@@ -1,22 +1,114 @@
-async function loadTeacherDashboard() {
-    // Fetch all classes
-    const classes = await fetch('/get_classes')
-        .then(res => res.json());
+document.addEventListener('DOMContentLoaded', function() {
+    loadClasses();
+    loadAssignments();
+    setupModals();
+    setupLogout();
+});
 
-    // Fetch all wordlists (assignments)
-    const assignments = await fetch('/get_wordlists')
-        .then(res => res.json());
+async function loadClasses() {
+    try {
+        const response = await fetch('/get_classes');
+        if (!response.ok) throw new Error('Failed to fetch classes');
 
-    // Update UI
-    document.getElementById('classCount').textContent = classes.length;
-    document.getElementById('assignmentCount').textContent = assignments.length;
-    document.getElementById('studentCount').textContent = classes.reduce((sum, cls) => sum + cls.students, 0);
+        const classes = await response.json();
+        const classList = document.getElementById('classList');
 
-    // Render classes
-    const classList = document.getElementById('classList');
-    classList.innerHTML = classes.map(cls => `
-        <a href="/teacher/class.html?id=${cls.id}" class="list-group-item list-group-item-action">
-            ${cls.label} (${cls.student_count || 0} Schüler)
-        </a>
-    `).join('');
+        classList.innerHTML = classes.map(cls => `
+            <a href="class.html?id=${cls.id}" class="list-group-item list-group-item-action">
+                ${cls.label}
+            </a>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading classes:', error);
+        alert('Fehler beim Laden der Klassen');
+    }
+}
+
+async function loadAssignments() {
+    try {
+        const response = await fetch('/get_wordlists');
+        if (!response.ok) throw new Error('Failed to fetch assignments');
+
+        const assignments = await response.json();
+        const assignmentList = document.getElementById('assignmentList');
+
+        assignmentList.innerHTML = assignments.map(assignment => `
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">${assignment.name}</h5>
+                    <button class="btn btn-primary add-words-btn" 
+                            data-id="${assignment.wordlist_id}">
+                        Wörter hinzufügen
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        document.querySelectorAll('.add-words-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const wordlistId = this.getAttribute('data-id');
+                showAddWordsModal(wordlistId);
+            });
+        });
+    } catch (error) {
+        console.error('Error loading assignments:', error);
+        alert('Fehler beim Laden der Aufgaben');
+    }
+}
+
+function showAddWordsModal(wordlistId) {
+    const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
+    document.getElementById('wordlistId').value = wordlistId;
+    document.getElementById('wordlistName').value = '';
+    document.getElementById('wordlistWords').value = '';
+    modal.show();
+}
+
+function setupModals() {
+    const newWordlistModal = new bootstrap.Modal(document.getElementById('wordlistModal'));
+
+    document.getElementById('newWordlistBtn').addEventListener('click', function() {
+        document.getElementById('wordlistForm').reset();
+        document.getElementById('wordlistId').value = '';
+        newWordlistModal.show();
+    });
+
+    document.getElementById('saveWordlist').addEventListener('click', async function() {
+        const wordlistId = document.getElementById('wordlistId').value;
+        const name = document.getElementById('wordlistName').value;
+        const words = document.getElementById('wordlistWords').value;
+
+        if (!name || !words) {
+            alert('Bitte füllen Sie alle Felder aus');
+            return;
+        }
+
+        try {
+            const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    wordlist_id: wordlistId || null,
+                    name,
+                    words
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to save wordlist');
+
+            newWordlistModal.hide();
+            loadAssignments();
+        } catch (error) {
+            console.error('Error saving wordlist:', error);
+            alert('Fehler beim Speichern der Wortliste');
+        }
+    });
+}
+
+function setupLogout() {
+    document.querySelector('.logout-btn').addEventListener('click', function() {
+        document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/';
+    });
 }

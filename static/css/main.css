@@ -92,3 +92,56 @@ body {
 .modal-content {
     border-radius: 10px;
 }
+
+
+.student-progress-container {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--secondary-color);
+    border-radius: 5px;
+}
+
+
+.training-table {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.training-table th {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 12px;
+    text-align: center;
+}
+
+.training-table td {
+    padding: 12px;
+    border: 1px solid #dee2e6;
+    text-align: center;
+}
+
+.training-table td.given {
+    background-color: var(--light-gray);
+    font-weight: bold;
+}
+
+.training-table input.correct {
+    background-color: rgba(28, 200, 138, 0.2);
+    border-color: var(--success-color);
+}
+
+.training-table input.incorrect {
+    background-color: rgba(231, 74, 59, 0.2);
+    border-color: var(--danger-color);
+}
+
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
