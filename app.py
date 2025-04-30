@@ -42,19 +42,6 @@ def student():
 def teacher():
     return render_template("teacher/teacher.html")
 
-@auth.route(app,'/class',required_role=["teacher"])
-def class_view():
-    return render_template("teacher/class.html")
-
-@auth.route(app, "/assignments", required_role=["teacher"])
-def assignments():
-    return render_template("teacher/assignments.html")
-
-@auth.route(app, "/class", required_role=["teacher"])
-def class_view():
-    class_id = request.args.get('id')
-    return render_template("teacher/class.html", class_id=class_id)
-
 @auth.route(app,"/create_exercise", required_role=["student"], methods=["POST"])
 def create_exercise():
     try:
