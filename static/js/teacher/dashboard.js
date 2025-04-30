@@ -14,7 +14,7 @@ async function loadClasses() {
         const classList = document.getElementById('classList');
 
         classList.innerHTML = classes.map(cls => `
-            <a href="/class?id=${cls.id}" class="list-group-item list-group-item-action">
+            <a href="/teacher/class?id=${cls.id}" class="list-group-item list-group-item-action">
                 ${cls.label}
             </a>
         `).join('');

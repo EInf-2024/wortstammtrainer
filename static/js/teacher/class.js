@@ -9,16 +9,19 @@ async function loadClassStudents() {
         const classId = urlParams.get('id');
 
         if (!classId) {
-            window.location.href = 'teacher.html';
+            window.location.href = '/teacher';
             return;
         }
 
-        // Fetch class name
-        const classResponse = await fetch(`/get_classes`);
-        if (!classResponse.ok) throw new Error('Failed to fetch class');
+        // Fetch class info
+        const classResponse = await fetch('/get_classes');
+        if (!classResponse.ok) throw new Error('Failed to fetch class info');
         const classes = await classResponse.json();
-        const cls = classes.find(c => c.id == classId);
-        document.getElementById('className').textContent = cls?.label || 'Klasse';
+        const currentClass = classes.find(c => c.id == classId);
+
+        if (currentClass) {
+            document.getElementById('className').textContent = currentClass.label;
+        }
 
         // Fetch students
         const studentResponse = await fetch(`/get_students?class_id=${classId}`);
@@ -35,11 +38,14 @@ async function loadClassStudents() {
                     </button>
                 </div>
                 <div class="student-progress-container mt-2 d-none" data-student-id="${student.id}">
-                    <!-- Progress will be loaded when clicked -->
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
                 </div>
             </div>
         `).join('');
 
+        // Add click handlers for progress toggles
         document.querySelectorAll('.toggle-progress-btn').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const container = this.closest('.student-item').querySelector('.student-progress-container');
@@ -58,20 +64,18 @@ async function loadClassStudents() {
     } catch (error) {
         console.error('Error loading class students:', error);
         alert('Fehler beim Laden der Schüler');
-        window.location.href = 'teacher.html';
+        window.location.href = '/teacher';
     }
 }
 
 async function loadStudentProgress(studentId, container) {
     try {
-        container.innerHTML = '<div class="text-center py-3">Lade Fortschritt...</div>';
-
         const response = await fetch(`/get_student?student_id=${studentId}`);
         if (!response.ok) throw new Error('Failed to fetch progress');
 
         const progress = await response.json();
 
-        if (Object.keys(progress).length === 0) {
+        if (!progress || Object.keys(progress).length === 0) {
             container.innerHTML = '<div class="text-center py-3">Keine Fortschrittsdaten verfügbar</div>';
             return;
         }
