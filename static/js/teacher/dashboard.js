@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setupLogout();
 });
 
-// Load teacher's classes
 async function loadClasses() {
     try {
         const response = await fetch('/get_classes');
@@ -25,7 +24,6 @@ async function loadClasses() {
     }
 }
 
-// Load all assignments
 async function loadAssignments() {
     try {
         const response = await fetch('/get_wordlists');
@@ -54,16 +52,17 @@ async function loadAssignments() {
             </div>
         `).join('');
 
-        // Add event listeners
         document.querySelectorAll('.add-words-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                showAddWordsModal(this.getAttribute('data-id'));
+                const wordlistId = this.getAttribute('data-id');
+                showAddWordsModal(wordlistId);
             });
         });
 
         document.querySelectorAll('.delete-assignment-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                deleteAssignment(this.getAttribute('data-id'));
+                const wordlistId = this.getAttribute('data-id');
+                deleteAssignment(wordlistId);
             });
         });
     } catch (error) {
@@ -72,23 +71,24 @@ async function loadAssignments() {
     }
 }
 
-// Delete an assignment
 async function deleteAssignment(wordlistId) {
     if (!confirm('Möchten Sie diese Aufgabe wirklich löschen?')) return;
 
     try {
         const response = await fetch(`/delete_wordlist?wordlist_id=${wordlistId}`);
-        if (!response.ok) throw new Error('Löschen fehlgeschlagen');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Löschen fehlgeschlagen');
+        }
 
         loadAssignments();
         alert('Aufgabe erfolgreich gelöscht');
     } catch (error) {
         console.error('Fehler beim Löschen:', error);
-        alert('Fehler beim Löschen der Aufgabe');
+        alert(`Fehler: ${error.message}`);
     }
 }
 
-// Show modal for adding/editing words
 function showAddWordsModal(wordlistId) {
     const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
     document.getElementById('wordlistId').value = wordlistId || '';
@@ -99,18 +99,20 @@ function showAddWordsModal(wordlistId) {
     modal.show();
 }
 
-// Setup modal interactions
 function setupModals() {
     const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
 
-    document.getElementById('newWordlistBtn').addEventListener('click', () => showAddWordsModal());
+    document.getElementById('newWordlistBtn').addEventListener('click', function() {
+        document.getElementById('wordlistForm').reset();
+        document.getElementById('wordlistId').value = '';
+        modal.show();
+    });
 
     document.getElementById('saveWordlist').addEventListener('click', async function() {
         const wordlistId = document.getElementById('wordlistId').value;
         const name = document.getElementById('wordlistName').value.trim();
         const wordsText = document.getElementById('wordlistWords').value.trim();
 
-        // Validation
         if (!name) {
             alert('Bitte geben Sie einen Namen ein');
             return;
@@ -121,7 +123,6 @@ function setupModals() {
             return;
         }
 
-        // Prepare data for backend
         const words = wordsText.split('\n')
             .map(w => w.trim())
             .filter(w => w.length > 0);
@@ -136,7 +137,7 @@ function setupModals() {
                 body: JSON.stringify({
                     name: name,
                     words: words,
-                    ...(wordlistId && { wordlist_id: wordlistId }) // Only include if editing
+                    ...(wordlistId && { wordlist_id: wordlistId })
                 })
             });
 
@@ -155,7 +156,6 @@ function setupModals() {
     });
 }
 
-// Logout handler
 function setupLogout() {
     document.querySelector('.logout-btn').addEventListener('click', function() {
         document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
