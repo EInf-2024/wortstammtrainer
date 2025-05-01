@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, g
+import json
 import os
 from dotenv import load_dotenv
 import openai
@@ -34,8 +35,6 @@ class CorrectedWordsList(BaseModel):
 
 app.route('/login', methods=['POST'])(auth.login) # checked
 
-
-@auth.route(app, "/")
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -156,7 +155,7 @@ def correct_exercise():
         kontrollieren Sie ob die 4 Wörter pro Dictonarys der deklarierten Wortart entsprechen und zum gleichen Stamm gehören.
         Übernehmen Sie den namen und die word_id und markieren Sie das Attribut correct mit 0 wenn ein Wort falsch ist und mit 1 wenn es richtig ist. 
         Wörter:
-        """ + data
+        """ + json.dumps(data, ensure_ascii=False)
 
         response = client.beta.chat.completions.parse(
             model="gpt-4o-mini",
@@ -170,6 +169,8 @@ def correct_exercise():
 
         response_data = response.choices[0].message.parsed.corrected_words
 
+
+
         wrong = []
         right = []
 
@@ -179,11 +180,15 @@ def correct_exercise():
             if i.correct == 1:
                 right.append(i.word_id)
 
-        right = list(set(right) - set(wrong))
-        wrong = list(set(wrong))
+        wrong_set = set(wrong)
+        right_set = set(right)
 
-        rw = set(right).update(set(wrong))
-        rw = list(rw)
+        right = list(right_set-wrong_set)
+        wrong = list(wrong_set)
+
+        rw = right + wrong
+
+
 
         with auth.open() as (connection, cursor):
 
@@ -191,22 +196,22 @@ def correct_exercise():
 
             for word_id in rw:
                 testquery = '''
-                SELECT 1
-                FROM `LA-fortschritt`
-                WHERE student_id = %s AND word_id = %s
+                    SELECT 1
+                    FROM `LA-fortschritt`
+                    WHERE student_id = %s AND word_id = %s
                 '''
 
                 cursor.execute(testquery, (student_id, word_id))
                 result = cursor.fetchone()
-                cursor.nextset()
 
                 if result is None:
                     insertquery = '''
-                    INSERT INTO `LA-fortschritt` (student_id, word_id, score)
-                    VALUES (%s, %s, 0)
+                        INSERT INTO `LA-fortschritt` (student_id, word_id, score)
+                        VALUES (%s, %s, 0)
                     '''
 
-                    cursor.execute(insertquery, (student_id, word_id))
+                    params = (student_id, word_id)
+                    cursor.execute(insertquery, params)
 
             # First update
             query1 = '''
@@ -214,7 +219,7 @@ def correct_exercise():
                 SET score = score + 1
                 WHERE word_id IN ({}) AND student_id = %s 
             '''.format(','.join(['%s'] * len(right)))
-            cursor.execute(query1, (right, student_id))
+            cursor.execute(query1, (*right, student_id))
 
             # Second update
             query2 = '''
@@ -222,9 +227,10 @@ def correct_exercise():
                 SET score = 0
                 WHERE word_id IN ({}) AND student_id = %s
             '''.format(','.join(['%s'] * len(wrong)))
-            cursor.execute(query2, (wrong, student_id))
+            cursor.execute(query2, (*wrong, student_id))
 
-        return jsonify(response_data)
+
+        return jsonify([word.dict() for word in response_data])
     except Exception as e:
         return jsonify({"error": 1, "message":{str(e)}})
 
@@ -430,7 +436,7 @@ def edit_wordlist():
         return jsonify({"error": 1, "message": str(e)}), 500
 
 
-@auth.route(app, '/reset', required_role=["student"], methods=['POST'])
+@auth.route(app, '/reset', required_role=["student"], methods=['POST']) #checked
 def reset():
     try:
         # {
@@ -451,14 +457,14 @@ def reset():
 
             word_ids = [(row["word_id"]) for row in result]
 
-            ph1 = ','.join(['%s'] * len(word_ids))
+            params = [(word_id, student_id) for word_id in word_ids]
 
-            query2 = f'''
+            query2 = '''
                 UPDATE `LA-fortschritt`
                 SET score = 0
-                WHERE word_id IN ({ph1}) AND student_id = %s
+                WHERE word_id = %s AND student_id = %s
             '''
-            cursor.execute(query2, (word_ids, student_id))
+            cursor.executemany(query2, params)
 
         return jsonify({"message": "progress successfully reset"})
     except Exception as e:
