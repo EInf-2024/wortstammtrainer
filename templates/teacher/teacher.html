@@ -21,24 +21,24 @@
 
     <div class="container mt-4">
         <div class="row">
-            <div class="col-md-8">
-                <div class="card neumorphic mb-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="card-title mb-0">Aufgaben</h2>
-                            <button class="btn btn-primary" id="newWordlistBtn">
-                                Neue Aufgabe
-                            </button>
-                        </div>
-                        <div id="assignmentList"></div>
-                    </div>
-                </div>
-            </div>
             <div class="col-md-4">
-                <div class="card neumorphic">
+                <div class="card neumorphic mb-4">
                     <div class="card-body">
                         <h2 class="card-title mb-3">Meine Klassen</h2>
                         <div class="list-group" id="classList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card neumorphic">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="card-title mb-0">Wortlisten</h2>
+                            <button class="btn btn-primary" id="newWordlistBtn">
+                                Neue Wortliste
+                            </button>
+                        </div>
+                        <div id="wordlistContainer"></div>
                     </div>
                 </div>
             </div>
@@ -50,14 +50,14 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Wortliste</h5>
+                    <h5 class="modal-title">Wortliste bearbeiten</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="wordlistForm">
                         <input type="hidden" id="wordlistId">
                         <div class="mb-3">
-                            <label class="form-label">Name der Aufgabe</label>
+                            <label class="form-label">Name der Wortliste</label>
                             <input type="text" class="form-control" id="wordlistName" required>
                         </div>
                         <div class="mb-3">
@@ -68,6 +68,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="button" class="btn btn-danger" id="deleteWordlist">Löschen</button>
                     <button type="button" class="btn btn-primary" id="saveWordlist">Speichern</button>
                 </div>
             </div>
@@ -75,6 +76,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/teacher/dashboard.js') }}"></script> <!-- <script src="../static/js/auth.js"></script>
+    <script src="{{ url_for('static', filename='js/teacher/dashboard.js') }}"></script>
 </body>
 </html>
