@@ -7,16 +7,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadClasses() {
     try {
-        const response = await fetch('get_classes');  // Removed leading /
+        const response = await fetch('get_classes');
         if (!response.ok) throw new Error('Klassen konnten nicht geladen werden');
         const classes = await response.json();
 
         const classList = document.getElementById('classList');
-        classList.innerHTML = classes.map(cls => `
-            <a href="class.html?id=${cls.id}" class="list-group-item list-group-item-action">
-                ${cls.label}
-            </a>
-        `).join('');
+        if (classList) {
+            classList.innerHTML = classes.map(cls => `
+                <a href="class.html?id=${cls.id}" class="list-group-item list-group-item-action">
+                    ${cls.label}
+                </a>
+            `).join('');
+        }
     } catch (error) {
         console.error('Fehler:', error);
         alert('Fehler beim Laden der Klassen');
@@ -25,7 +27,7 @@ async function loadClasses() {
 
 async function loadWordlists() {
     try {
-        const response = await fetch('get_wordlists');  // Removed leading /
+        const response = await fetch('get_wordlists');
         if (!response.ok) throw new Error('Wortlisten konnten nicht geladen werden');
         const wordlists = await response.json();
 
@@ -50,11 +52,11 @@ async function loadWordlists() {
 
         // Add event listeners
         document.querySelectorAll('.edit-wordlist').forEach(btn => {
-            btn.addEventListener('click', () => showWordlistModal(btn.dataset.id));
+            btn.addEventListener('click', () => showWordlistModal(parseInt(btn.dataset.id)));
         });
 
         document.querySelectorAll('.delete-wordlist').forEach(btn => {
-            btn.addEventListener('click', () => deleteWordlist(btn.dataset.id));
+            btn.addEventListener('click', () => deleteWordlist(parseInt(btn.dataset.id)));
         });
     } catch (error) {
         console.error('Fehler:', error);
@@ -66,23 +68,30 @@ async function deleteWordlist(wordlistId) {
     if (!confirm('Wortliste wirklich löschen?')) return;
 
     try {
-        const response = await fetch('delete_wordlist', {  // Removed leading /
+        const response = await fetch('/delete_wordlist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wordlist_id: wordlistId })
+            body: JSON.stringify({
+                wordlist_id: wordlistId // Already parsed as integer
+            })
         });
 
-        if (!response.ok) throw new Error('Löschen fehlgeschlagen');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Löschen fehlgeschlagen');
+        }
 
-        loadWordlists();
+        // Remove the element immediately
+        document.querySelector(`.wordlist-card[data-id="${wordlistId}"]`)?.remove();
+        alert('Wortliste erfolgreich gelöscht');
     } catch (error) {
         console.error('Fehler:', error);
-        alert('Fehler beim Löschen');
+        alert('Fehler beim Löschen: ' + error.message);
     }
 }
 
 function setupModals() {
-    const modal = new bootstrap.Modal('#wordlistModal');
+    const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
 
     // New wordlist button
     document.getElementById('newWordlistBtn').addEventListener('click', () => {
@@ -104,77 +113,85 @@ function setupModals() {
         }
 
         try {
-            const endpoint = wordlistId ? 'edit_wordlist' : 'create_wordlist';  // Removed leading /
+            const payload = {
+                name: name,
+                words: words.split('\n')
+                           .map(w => w.trim())
+                           .filter(w => w) // Remove empty lines
+            };
+
+            // Add wordlist_id only when editing
+            if (wordlistId) {
+                payload.wordlist_id = parseInt(wordlistId);
+            }
+
+            const endpoint = wordlistId ? '/edit_wordlist' : '/create_wordlist';
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    wordlist_id: wordlistId || undefined,
-                    name: name,
-                    words: words.split('\n').filter(w => w.trim())
-                })
+                body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error('Speichern fehlgeschlagen');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Speichern fehlgeschlagen');
+            }
 
             modal.hide();
-            loadWordlists();
+            loadWordlists(); // Refresh the list
+            alert('Wortliste erfolgreich gespeichert');
         } catch (error) {
             console.error('Fehler:', error);
-            alert('Fehler beim Speichern');
+            alert('Fehler beim Speichern: ' + error.message);
         }
     });
 
     // Delete button in modal
     document.getElementById('deleteWordlistBtn').addEventListener('click', async () => {
-        const wordlistId = document.getElementById('wordlistId').value;
+        const wordlistId = parseInt(document.getElementById('wordlistId').value);
         if (!confirm('Wortliste wirklich löschen?')) return;
 
         try {
-            const response = await fetch('delete_wordlist', {  // Removed leading /
+            const response = await fetch('/delete_wordlist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ wordlist_id: wordlistId })
+                body: JSON.stringify({
+                    wordlist_id: wordlistId
+                })
             });
 
             if (!response.ok) throw new Error('Löschen fehlgeschlagen');
 
             modal.hide();
-            loadWordlists();
+            loadWordlists(); // Refresh the list
+            alert('Wortliste erfolgreich gelöscht');
         } catch (error) {
             console.error('Fehler:', error);
-            alert('Fehler beim Löschen');
+            alert('Fehler beim Löschen: ' + error.message);
         }
     });
 
-    // Proper modal dismissal
+    // Modal dismissal
     document.querySelector('.modal .btn-close').addEventListener('click', () => modal.hide());
     document.querySelector('.modal .btn-secondary').addEventListener('click', () => modal.hide());
 }
 
 async function showWordlistModal(wordlistId) {
-    const modal = new bootstrap.Modal('#wordlistModal');
+    const modal = new bootstrap.Modal(document.getElementById('wordlistModal'));
     const wordlistCard = document.querySelector(`.wordlist-card[data-id="${wordlistId}"]`);
 
     document.getElementById('wordlistId').value = wordlistId;
     document.getElementById('wordlistName').value = wordlistCard.querySelector('.card-title').textContent;
     document.getElementById('deleteWordlistBtn').classList.remove('d-none');
 
-    // Load words for editing
-    try {
-        const response = await fetch(`get_wordlist_words?wordlist_id=${wordlistId}`);  // Removed leading /
-        if (!response.ok) throw new Error('Wörter konnten nicht geladen werden');
-        const words = await response.json();
-        document.getElementById('wordlistWords').value = words.join('\n');
-        modal.show();
-    } catch (error) {
-        console.error('Fehler:', error);
-        alert('Wörter konnten nicht geladen werden');
-    }
+    // Since we removed /get_wordlist_words, we'll initialize with empty words
+    // Teacher can add new words when editing
+    document.getElementById('wordlistWords').value = '';
+    modal.show();
 }
 
 function setupLogout() {
-    document.querySelector('.logout-btn').addEventListener('click', function() {
+    document.querySelector('.logout-btn')?.addEventListener('click', function() {
         document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.location.href = '/';
     });
