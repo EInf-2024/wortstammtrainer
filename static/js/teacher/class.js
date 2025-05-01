@@ -9,12 +9,12 @@ async function loadClassStudents() {
         const classId = urlParams.get('id');
 
         if (!classId) {
-            window.location.href = '/teacher';
+            window.location.href = 'teacher.html';
             return;
         }
 
         // Fetch class info
-        const classResponse = await fetch('/get_classes');
+        const classResponse = await fetch('get_classes');  // Removed leading /
         if (!classResponse.ok) throw new Error('Failed to fetch class info');
         const classes = await classResponse.json();
         const currentClass = classes.find(c => c.id == classId);
@@ -24,7 +24,7 @@ async function loadClassStudents() {
         }
 
         // Fetch students
-        const studentResponse = await fetch(`/get_students?class_id=${classId}`);
+        const studentResponse = await fetch(`get_students?class_id=${classId}`);  // Removed leading /
         if (!studentResponse.ok) throw new Error('Failed to fetch students');
         const students = await studentResponse.json();
 
@@ -62,15 +62,15 @@ async function loadClassStudents() {
             });
         });
     } catch (error) {
-        console.error('Error loading class students:', error);
+        console.error('Error:', error);
         alert('Fehler beim Laden der Schüler');
-        window.location.href = '/teacher';
+        window.location.href = 'teacher.html';
     }
 }
 
 async function loadStudentProgress(studentId, container) {
     try {
-        const response = await fetch(`/get_student?student_id=${studentId}`);
+        const response = await fetch(`get_student_progress?student_id=${studentId}`);  // Removed leading /
         if (!response.ok) throw new Error('Failed to fetch progress');
 
         const progress = await response.json();
@@ -81,14 +81,14 @@ async function loadStudentProgress(studentId, container) {
         }
 
         container.innerHTML = `
-            <div class="list-group">
+            <div class="list-group student-progress-list">
                 ${Object.entries(progress).map(([wordlistId, progressStr]) => {
                     const [mastered, total] = progressStr.split('/').map(Number);
                     const percentage = total > 0 ? Math.round((mastered / total) * 100) : 0;
                     return `
                         <div class="list-group-item">
                             <div class="d-flex justify-content-between">
-                                <span>Aufgabe ${wordlistId}</span>
+                                <span>Wortliste ${wordlistId}</span>
                                 <span>${progressStr}</span>
                             </div>
                             <div class="progress mt-2">
@@ -100,7 +100,7 @@ async function loadStudentProgress(studentId, container) {
             </div>
         `;
     } catch (error) {
-        console.error('Error loading student progress:', error);
+        console.error('Error:', error);
         container.innerHTML = '<div class="text-center py-3 text-danger">Fehler beim Laden des Fortschritts</div>';
     }
 }
