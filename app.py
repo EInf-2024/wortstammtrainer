@@ -32,10 +32,10 @@ class CorrectedWordsList(BaseModel):
     corrected_words: List[CorrectedWord]
 
 
-app.route('/login', methods=['POST'])(auth.login)
+app.route('/login', methods=['POST'])(auth.login) # checked
 
 
-@auth.route(app, "/", required_role=["student", "teacher"])
+@auth.route(app, "/")
 def index():
     return render_template("index.html")
 
@@ -228,7 +228,7 @@ def correct_exercise():
         return jsonify({"error": 1, "message":{str(e)}})
 
 
-@auth.route(app, '/get_classes', required_role=["teacher"], methods=['GET'])
+@auth.route(app, '/get_classes', required_role=["teacher"], methods=['GET']) # checked
 def get_classes():
     try:
         with auth.open() as (connection, cursor):
@@ -242,7 +242,7 @@ def get_classes():
         return jsonify({"error": 1, "message": {str(e)}}), 500
 
 
-@auth.route(app, '/get_students', required_role=["teacher"], methods=['GET'])
+@auth.route(app, '/get_students', required_role=["teacher"], methods=['GET']) # checked
 def get_students():
     try:
         class_id = request.args.get('class_id', type=int)
@@ -314,7 +314,7 @@ def get_student():
         return jsonify({"error": 1, "message": str(e)}), 500
 
 
-@auth.route(app, '/get_wordlists', required_role=["teacher", "student"], methods=['GET'])
+@auth.route(app, '/get_wordlists', required_role=["teacher", "student"], methods=['GET']) # checked
 def get_wordlists():
     try:
         with auth.open() as (connection, cursor):
@@ -331,7 +331,7 @@ def get_wordlists():
         return jsonify({"error": 1, "message": str(e)}), 500
 
 
-@auth.route(app, '/create_wordlist', required_role=["teacher"], methods=['POST'])
+@auth.route(app, '/create_wordlist', required_role=["teacher"], methods=['POST']) # checked
 def create_wordlist():
     try:
         # {
@@ -371,7 +371,7 @@ def create_wordlist():
         return jsonify({"error": 1, "message": str(e)}), 500
 
 
-@auth.route(app, '/delete_wordlist', required_role=["teacher"], methods=['POST'])
+@auth.route(app, '/delete_wordlist', required_role=["teacher"], methods=['POST']) # checked
 def delete_wordlist():
     try:
 
@@ -399,7 +399,7 @@ def delete_wordlist():
         return jsonify({"error": 1, "message": str(e)}), 500
 
 
-@auth.route(app, '/edit_wordlist', required_role=["teacher"], methods=['POST'])
+@auth.route(app, '/edit_wordlist', required_role=["teacher"], methods=['POST']) # checked
 def edit_wordlist():
     try:
         # {
