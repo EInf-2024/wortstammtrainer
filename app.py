@@ -36,6 +36,7 @@ app.route('/login', methods=['POST'])(auth.login) # checked
 
 
 @auth.route(app, "/")
+@app.route("/")
 def index():
     return render_template("index.html")
 
