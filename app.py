@@ -81,40 +81,71 @@ def create_exercise():
                 cursor.execute(base_query, (wordlist_ids[0],))
                 result = cursor.fetchall()
 
-            # if personal_pool is active the selected words depend on the given wordlist(s) as well as the student and if they mastered the words
+            # if personal_pool is active the selected words depend on the given wordlist(s) as well as the student and if they've mastered the words
             elif personal_pool == 1:
 
-                # first select all word_ids which are not mastered (score < 3) and are saved for this student (meaning they at least used the words once)
+                # check if the student even has entries in LA-fortschritt which are not mastered
                 query1 = '''
-                    SELECT word_id
-                    FROM `LA-fortschritt`
-                    WHERE score < 3 AND student_id = %s 
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM `LA-fortschritt`
+                        WHERE score < 3 AND student_id = %s
+                    )
                 '''
-
                 cursor.execute(query1, (student_id,))
-                result = cursor.fetchall()
+                result = cursor.fetchone()[0]
+
+                if result == 0:
+                    return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
+
+                # if there are entries in LA-fortschritt we can proceed
+                elif result == 1:
+                    # first select all word_ids which are not mastered (score < 3) and are saved for this student (meaning they at least used the words once)
+                    query1 = '''
+                        SELECT word_id
+                        FROM `LA-fortschritt`
+                        WHERE score < 3 AND student_id = %s
+                    '''
+                    cursor.execute(query1, (student_id,))
+                    result = cursor.fetchall()
+
+                    word_ids = [(row["word_id"]) for row in result] # convert the ids to a list
+                    params = word_ids + wordlist_ids
+
+                    ph1 = ','.join(['%s'] * len(word_ids))      # list of placeholders %s for the query
+                    ph2 = ','.join(['%s'] * len(wordlist_ids))
+
+                    testquery = f'''
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM `LA-wörter`
+                            WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
+                        )
+                    '''
+                    cursor.execute(testquery, params)
+                    result = cursor.fetchone()[0]
+
+                    if result == 0:
+                        return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
+
+                    elif result == 1:
+                        # now select all the words which the student has not mastered, that also correspond to the given wordlist(s)
+                        query2 = f'''
+                            SELECT word_id, name
+                            FROM `LA-wörter`
+                            WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
+                        '''
 
 
-                word_ids = [(row["word_id"]) for row in result] # convert the ids to a list
-
-                ph1 = ','.join(['%s'] * len(word_ids))
-                ph2 = ','.join(['%s'] * len(wordlist_ids))
-
-                # now
-                query2 = f'''
-                    SELECT word_id, name
-                    FROM `LA-wörter`
-                    WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
-                '''
-
-                params = word_ids + wordlist_ids
-                cursor.execute(query2, params)
-                result = cursor.fetchall()
+                        cursor.execute(query2, params)
+                        result = cursor.fetchall()
 
             else:
                 return jsonify({"error": 1, "message": "personal_pool parameter should be 0 or 1"}), 400
 
         words = [(row["word_id"], row["name"]) for row in result]
+
+
 
         prompt = f"""
         Sie erhalten französische Wörter in der Form (word_id, name)
