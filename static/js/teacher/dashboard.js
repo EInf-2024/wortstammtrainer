@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadClasses() {
     try {
-        const response = await fetch('/get_classes');
+        const response = await fetch('get_classes');
         if (!response.ok) throw new Error('Klassen konnten nicht geladen werden');
 
         const classes = await response.json();
@@ -26,7 +26,7 @@ async function loadClasses() {
 
 async function loadAssignments() {
     try {
-        const response = await fetch('/get_wordlists');
+        const response = await fetch('get_wordlists');
         if (!response.ok) throw new Error('Aufgaben konnten nicht geladen werden');
 
         const assignments = await response.json();
