@@ -59,6 +59,11 @@ def teacher_class():
     return render_template("teacher/class.html")
 
 
+@auth.route(app, "/training.html", required_role=["student"])
+def training():
+    return render_template("student/training.html")
+
+
 @auth.route(app, "/create_exercise", required_role=["student"], methods=["POST"])  # checked
 def create_exercise():
     try:

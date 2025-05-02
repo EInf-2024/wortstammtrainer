@@ -2,34 +2,49 @@ document.addEventListener("DOMContentLoaded", function() {
     document.getElementById("loginForm").addEventListener("submit", async function(event) {
         event.preventDefault();
 
-        // Corrected ID references to match HTML
-        const username = document.getElementById("email").value; // Changed from "name" to "email"
+        const username = document.getElementById("email").value;
         const password = document.getElementById("password").value;
 
         try {
-            const response = await fetch("login", { // Changed from "/api/login"
+            const response = await fetch("login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    username: username, // Matches the name="username" in HTML
+                    username: username,
                     password: password
                 })
             });
 
             if (response.ok) {
                 const data = await response.json();
-                // Set auth cookie as required by backend
+                // Debug: log the response for troubleshooting
+                console.log("Login response:", data);
+
+                // Defensive: check for required fields
+                if (!data.access_token || !data.role) {
+                    alert("Login fehlgeschlagen: Ungültige Serverantwort");
+                    return;
+                }
+
                 document.cookie = `auth=${data.access_token}; path=/`;
 
-                // Corrected redirect paths
                 if (data.role === "student") {
-                    window.location.href = "student"; // Simplified path
+                    window.location.href = "/student";
                 } else if (data.role === "teacher") {
-                    window.location.href = "teacher"; // Simplified path
+                    window.location.href = "/teacher";
                 }
             } else {
-                const errorData = await response.json();
-                alert(`Login fehlgeschlagen: ${errorData.message || 'Unknown error'}`);
+                let errorMsg = "Unbekannter Fehler";
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.message || errorMsg;
+                } catch (e) {
+                    // If not JSON, use status text
+                    errorMsg = response.status === 401
+                        ? "Falscher Benutzername oder Passwort"
+                        : response.statusText || errorMsg;
+                }
+                alert(`Login fehlgeschlagen: ${errorMsg}`);
             }
         } catch (error) {
             console.error("Login error:", error);

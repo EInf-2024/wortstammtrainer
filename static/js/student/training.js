@@ -1,12 +1,20 @@
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const wordlistIds = urlParams.get('wordlist_ids') || urlParams.get('id');
+    // Accept both 'wordlist_ids' (comma-separated) and 'id' (single)
+    let wordlistIds = urlParams.get('wordlist_ids');
+    if (!wordlistIds) {
+        const singleId = urlParams.get('id');
+        if (singleId) {
+            wordlistIds = singleId;
+        }
+    }
 
     if (!wordlistIds) {
-        window.location.href = 'student.html';
+        window.location.href = '/student';
         return;
     }
 
+    // If multiple IDs, it's personal pool, else Einzeltraining
     const personalPool = wordlistIds.includes(',') ? 1 : 0;
     loadWords(wordlistIds, personalPool);
     setupButtons();
@@ -31,7 +39,7 @@ async function loadWords(wordlistIds, personalPool) {
     } catch (error) {
         console.error('Error loading words:', error);
         alert('Fehler beim Laden der Wörter');
-        window.location.href = 'student.html';
+        window.location.href = '/student';
     }
 }
 
