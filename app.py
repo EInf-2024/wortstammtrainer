@@ -236,16 +236,36 @@ def correct_exercise():
                     params = (student_id, word_id)
                     cursor.execute(insertquery, params)
 
-            # Always increment score for all right answers (even if just inserted)
-            if right:
-                query1 = '''
-                    UPDATE `LA-fortschritt`
-                    SET score = score + 1
-                    WHERE word_id IN ({}) AND id = %s 
-                '''.format(','.join(['%s'] * len(right)))
-                cursor.execute(query1, (*right, student_id))
 
-            # Second update
+            # Update scores for correct answers with proper consecutive tracking
+            if right:
+                # First get current scores for all right answers
+                cursor.execute(f'''
+                    SELECT word_id, score 
+                    FROM `LA-fortschritt` 
+                    WHERE word_id IN ({','.join(['%s'] * len(right))}) AND id = %s
+                ''', (*right, student_id))
+                current_scores = {row['word_id']: row['score'] for row in cursor.fetchall()}
+
+                # Prepare updates
+                updates = []
+                for word_id in right:
+                    current_score = current_scores.get(word_id, 0)
+                    new_score = current_score + 1 if current_score >= 0 else 1
+                    if new_score >= 3:  # Mark as mastered
+                        new_score = 3
+                    updates.append((new_score, word_id, student_id))
+
+                # Execute updates
+                update_query = '''
+                               UPDATE `LA-fortschritt`
+                               SET score = %s
+                               WHERE word_id = %s \
+                                 AND id = %s \
+                               '''
+                cursor.executemany(update_query, updates)
+
+# Reset scores for wrong answers
             if wrong:
                 query2 = '''
                     UPDATE `LA-fortschritt`
