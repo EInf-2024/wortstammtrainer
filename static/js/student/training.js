@@ -86,7 +86,11 @@ function renderWordTable(words) {
 }
 
 function setupButtons() {
-    document.getElementById('checkAnswers').addEventListener('click', async function() {
+    const checkBtn = document.getElementById('checkAnswers');
+    const nextBtn = document.getElementById('nextWords');
+    nextBtn.disabled = true; // Disable initially
+
+    checkBtn.addEventListener('click', async function() {
         const inputs = document.querySelectorAll('#wordTableBody input[type="text"]');
         const answers = {};
 
@@ -114,13 +118,15 @@ function setupButtons() {
 
             const results = await response.json();
             highlightResults(results);
+            nextBtn.disabled = false; // Enable after checking
+            checkBtn.disabled = true; // Prevent double-checking
         } catch (error) {
             console.error('Error checking answers:', error);
             alert('Fehler beim Korrigieren der Antworten');
         }
     });
 
-    document.getElementById('nextWords').addEventListener('click', function() {
+    nextBtn.addEventListener('click', function() {
         location.reload(); // Reload to get new random words
     });
 }
@@ -141,4 +147,3 @@ function setupLogout() {
         window.location.href = '/';
     });
 }
-
