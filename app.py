@@ -445,7 +445,6 @@ def create_wordlist():
 @auth.route(app, '/delete_wordlist', required_role=["teacher"], methods=['POST'])  # checked
 def delete_wordlist():
     try:
-
         # {
         # "wordlist_id": int
         # }
@@ -453,14 +452,16 @@ def delete_wordlist():
         wordlist_id = data.get('wordlist_id')
 
         with auth.open() as (connection, cursor):
+            # First delete all words in LA-wörter for this wordlist
             query = '''
-                DELETE FROM `LA-wortliste`
+                DELETE FROM `LA-wörter`
                 WHERE wordlist_id = %s
             '''
             cursor.execute(query, (wordlist_id,))
 
+            # Then delete the wordlist itself
             query = '''
-                DELETE FROM `LA-wörter`
+                DELETE FROM `LA-wortliste`
                 WHERE wordlist_id = %s
             '''
             cursor.execute(query, (wordlist_id,))
