@@ -435,6 +435,7 @@ def create_wordlist():
             '''
 
             cursor.executemany(query2, params)
+            connection.commit()
 
         return jsonify({"message": "wordlist successfully created"})
     except Exception as e:
@@ -463,6 +464,7 @@ def delete_wordlist():
                 WHERE wordlist_id = %s
             '''
             cursor.execute(query, (wordlist_id,))
+            connection.commit()
 
         return jsonify({"message": "wordlist successfully removed"})
     except Exception as e:
@@ -485,6 +487,12 @@ def edit_wordlist():
         words = words.split('\n')
 
         with auth.open() as (connection, cursor):
+            # First, delete all words for this wordlist
+            delete_query = '''
+                DELETE FROM `LA-wörter`
+                WHERE wordlist_id = %s
+            '''
+            cursor.execute(delete_query, (wordlist_id,))
 
             params = [(word, wordlist_id) for word in words]
 
@@ -493,8 +501,31 @@ def edit_wordlist():
                 VALUES (%s, %s)
             '''
             cursor.executemany(query, params)
+            connection.commit()
 
         return jsonify({"message": "wordlist successfully edited"})
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
+
+
+@auth.route(app, '/get_wordlist_words', required_role=["teacher"], methods=['GET'])
+def get_wordlist_words():
+    try:
+        wordlist_id = request.args.get('wordlist_id', type=int)
+        if not wordlist_id:
+            return jsonify({"error": 1, "message": "wordlist_id is required"}), 400
+
+        with auth.open() as (connection, cursor):
+            query = '''
+                SELECT name FROM `LA-wörter`
+                WHERE wordlist_id = %s
+                ORDER BY word_id
+            '''
+            cursor.execute(query, (wordlist_id,))
+            result = cursor.fetchall()
+            words = [row["name"] for row in result]
+
+        return jsonify({"words": words})
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 

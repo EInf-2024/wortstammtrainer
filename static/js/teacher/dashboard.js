@@ -264,8 +264,19 @@ async function showWordlistModal(wordlistId) {
     document.getElementById('wordlistName').value = wordlistCard.querySelector('.card-title').textContent;
     document.getElementById('deleteWordlistBtn').classList.remove('d-none');
 
-    // Initialize with empty words (your backend doesn't provide words for editing)
-    document.getElementById('wordlistWords').value = '';
+    // Fetch words for this wordlist and populate textarea
+    try {
+        const response = await fetch(`/get_wordlist_words?wordlist_id=${wordlistId}`);
+        if (!response.ok) {
+            throw new Error('Fehler beim Laden der Wörter');
+        }
+        const data = await response.json();
+        document.getElementById('wordlistWords').value = (data.words || []).join('\n');
+    } catch (e) {
+        document.getElementById('wordlistWords').value = '';
+        alert('Fehler beim Laden der Wörter für die Wortliste.');
+    }
+
     modal.show();
 }
 
