@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadWordlists();
     setupLogout();
+    setupTrainingPoolButton();
 });
 
 async function loadWordlists() {
@@ -10,32 +11,24 @@ async function loadWordlists() {
         if (!wordlistsResponse.ok) throw new Error('Wortlisten konnten nicht geladen werden');
         const wordlists = await wordlistsResponse.json();
 
-        // Fetch progress (for training pool)
+        // Fetch progress
         const progressResponse = await fetch('/get_student_progress');
         const progress = progressResponse.ok ? await progressResponse.json() : {};
 
-        // Render wordlist cards
+        // Render wordlist cards as a vertical list
         const container = document.getElementById('wordlistContainer');
         container.innerHTML = wordlists.map(wl => {
-            const prog = progress[wl.wordlist_id] || '0/0';
-            const [mastered, total] = prog.split('/').map(Number);
-            const percentage = total > 0 ? Math.round((mastered / total) * 100) : 0;
-
+            const prog = progress[wl.wordlist_id] || { mastered: 0, total: 0, unmastered: 0 };
             return `
-                <div class="col-md-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title">${wl.name}</h5>
-                            <div class="progress mb-3">
-                                <div class="progress-bar" style="width: ${percentage}%"></div>
-                            </div>
-                            <div class="d-grid gap-2">
-                                <a href="training.html?id=${wl.wordlist_id}" class="btn btn-primary">
-                                    Einzeltraining
-                                </a>
-                            </div>
-                        </div>
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>${wl.name}</span>
+                        <span class="badge bg-secondary ms-2">${prog.mastered}/${prog.total} gemeistert</span>
+                        <span class="badge bg-info ms-2">${prog.total} Wörter</span>
                     </div>
+                    <a href="training.html?id=${wl.wordlist_id}" class="btn btn-primary btn-sm">
+                        Einzeltraining
+                    </a>
                 </div>
             `;
         }).join('');
@@ -43,47 +36,46 @@ async function loadWordlists() {
         // Render training pool checkboxes
         const poolList = document.getElementById('trainingPoolList');
         poolList.innerHTML = wordlists.map(wl => {
-            const prog = progress[wl.wordlist_id] || '0/0';
-            const [mastered, total] = prog.split('/').map(Number);
-            const unmastered = total - mastered;
-
+            const prog = progress[wl.wordlist_id] || { mastered: 0, total: 0, unmastered: 0 };
             return `
                 <div class="form-check mb-2">
                     <input class="form-check-input wordlist-checkbox" 
                            type="checkbox" 
                            value="${wl.wordlist_id}"
-                           id="pool-${wl.wordlist_id}"
-                           ${unmastered === 0 ? 'disabled' : ''}>
+                           id="pool-${wl.wordlist_id}">
                     <label class="form-check-label" for="pool-${wl.wordlist_id}">
                         ${wl.name}
-                        <span class="badge bg-primary rounded-pill ms-2">${unmastered}</span>
+                        <span class="badge bg-primary rounded-pill ms-2">${prog.unmastered} im Pool</span>
+                        <span class="ms-2 text-muted"><small>(${prog.mastered}/${prog.total})</small></span>
                     </label>
                 </div>
             `;
         }).join('');
-
-        // Setup training pool button
-        document.getElementById('startTraining').addEventListener('click', function() {
-            const selected = Array.from(document.querySelectorAll('.wordlist-checkbox:checked:not(:disabled)'))
-                .map(el => el.value);
-
-            if (selected.length === 0) {
-                alert('Bitte wähle mindestens eine Wortliste aus');
-                return;
-            }
-
-            window.location.href = `training.html?wordlist_ids=${selected.join(',')}`;
-        });
-
     } catch (error) {
-        console.error('Fehler:', error);
-        alert('Fehler beim Laden der Daten');
+        alert(error.message);
     }
 }
 
 function setupLogout() {
-    document.querySelector('.logout-btn').addEventListener('click', function() {
-        document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        window.location.href = '/';
+    const logoutBtn = document.querySelector('.logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            document.cookie = "auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            window.location.href = "/";
+        });
+    }
+}
+
+function setupTrainingPoolButton() {
+    const btn = document.getElementById('startTraining');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        const checked = Array.from(document.querySelectorAll('.wordlist-checkbox:checked'))
+            .map(cb => cb.value);
+        if (checked.length === 0) {
+            alert('Bitte wähle mindestens eine Wortliste aus.');
+            return;
+        }
+        window.location.href = `training.html?wordlist_ids=${checked.join(',')}`;
     });
 }

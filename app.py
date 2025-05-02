@@ -562,11 +562,57 @@ def reset():
             query2 = '''
                 UPDATE `LA-fortschritt`
                 SET score = 0
-                WHERE word_id = %s AND student_id = %s
+                WHERE word_id = %s AND id = %s
             '''
             cursor.executemany(query2, params)
 
         return jsonify({"message": "progress successfully reset"})
+    except Exception as e:
+        return jsonify({"error": 1, "message": str(e)}), 500
+
+
+@auth.route(app, '/get_student_progress', required_role=["student"], methods=['GET'])
+def get_student_progress():
+    try:
+        student_id = g.get("user_id")
+        with auth.open() as (connection, cursor):
+            # Get all wordlists
+            cursor.execute('SELECT wordlist_id, name FROM `LA-wortliste`')
+            wordlists = cursor.fetchall()
+
+            progress = {}
+            for wl in wordlists:
+                wordlist_id = wl["wordlist_id"]
+                # Total words in wordlist
+                cursor.execute('SELECT COUNT(*) as total FROM `LA-wörter` WHERE wordlist_id = %s', (wordlist_id,))
+                total = cursor.fetchone()["total"]
+
+                # Mastered words (score >= 3)
+                cursor.execute('''
+                    SELECT COUNT(*) as mastered
+                    FROM `LA-fortschritt`
+                    WHERE id = %s AND word_id IN (
+                        SELECT word_id FROM `LA-wörter` WHERE wordlist_id = %s
+                    ) AND score >= 3
+                ''', (student_id, wordlist_id))
+                mastered = cursor.fetchone()["mastered"]
+
+                # Unmastered words (score < 3)
+                cursor.execute('''
+                    SELECT COUNT(*) as unmastered
+                    FROM `LA-wörter`
+                    WHERE wordlist_id = %s AND word_id NOT IN (
+                        SELECT word_id FROM `LA-fortschritt` WHERE id = %s AND score >= 3
+                    )
+                ''', (wordlist_id, student_id))
+                unmastered = cursor.fetchone()["unmastered"]
+
+                progress[wordlist_id] = {
+                    "total": total,
+                    "mastered": mastered,
+                    "unmastered": unmastered
+                }
+        return jsonify(progress)
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 

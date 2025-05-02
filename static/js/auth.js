@@ -37,9 +37,9 @@ document.addEventListener("DOMContentLoaded", function() {
                 let errorMsg = "Unbekannter Fehler";
                 try {
                     const errorData = await response.json();
-                    errorMsg = errorData.message || errorMsg;
+                    console.log("Login error response:", errorData);
+                    errorMsg = errorData.message || errorData.error || errorMsg;
                 } catch (e) {
-                    // If not JSON, use status text
                     errorMsg = response.status === 401
                         ? "Falscher Benutzername oder Passwort"
                         : response.statusText || errorMsg;
@@ -51,4 +51,20 @@ document.addEventListener("DOMContentLoaded", function() {
             alert("Ein Verbindungsfehler ist aufgetreten");
         }
     });
+
+    // Call setupLogout() if you are on a page with a logout button
+    if (document.querySelector('.logout-btn')) {
+        setupLogout();
+    }
 });
+
+// Add this function at the end of the file or in your logout logic
+function setupLogout() {
+    const logoutBtn = document.querySelector('.logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            document.cookie = "auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            window.location.href = "/";
+        });
+    }
+}
