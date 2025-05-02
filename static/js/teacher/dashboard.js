@@ -26,7 +26,7 @@ async function loadClasses() {
         }
 
         classList.innerHTML = classes.map(cls => `
-            <a href="class.html?id=${cls.id}" class="list-group-item list-group-item-action">
+            <a href="/teacher/class.html?id=${cls.id}" class="list-group-item list-group-item-action">
                 ${cls.label}
             </a>
         `).join('');

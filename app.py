@@ -54,6 +54,11 @@ def teacher():
     return render_template("teacher/teacher.html")
 
 
+@auth.route(app, "/teacher/class.html", required_role=["teacher"])
+def teacher_class():
+    return render_template("teacher/class.html")
+
+
 @auth.route(app, "/create_exercise", required_role=["student"], methods=["POST"])  # checked
 def create_exercise():
     try:
@@ -531,3 +536,4 @@ def reset():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
