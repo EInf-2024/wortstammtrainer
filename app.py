@@ -1,3 +1,5 @@
+from os.path import exists
+
 from flask import Flask, request, jsonify, render_template, g
 import json
 import os
@@ -7,6 +9,7 @@ from pydantic import BaseModel
 from typing import List, Dict
 import auth
 from auth.auth import cursor
+import traceback
 
 app = Flask(__name__)
 load_dotenv()
@@ -89,11 +92,11 @@ def create_exercise():
                     SELECT EXISTS (
                         SELECT 1
                         FROM `LA-fortschritt`
-                        WHERE score < 3 AND student_id = %s
-                    )
+                        WHERE score < 3 AND id = %s
+                    ) AS exists_result
                 '''
                 cursor.execute(query1, (student_id,))
-                result = cursor.fetchone()[0]
+                result = cursor.fetchone()["exists_result"]
 
                 if result == 0:
                     return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
@@ -104,7 +107,7 @@ def create_exercise():
                     query1 = '''
                         SELECT word_id
                         FROM `LA-fortschritt`
-                        WHERE score < 3 AND student_id = %s
+                        WHERE score < 3 AND id = %s
                     '''
                     cursor.execute(query1, (student_id,))
                     result = cursor.fetchall()
@@ -115,37 +118,35 @@ def create_exercise():
                     ph1 = ','.join(['%s'] * len(word_ids))      # list of placeholders %s for the query
                     ph2 = ','.join(['%s'] * len(wordlist_ids))
 
+                    # now check if any of the selected words belong to the given wordlist(s)
                     testquery = f'''
                         SELECT EXISTS (
                             SELECT 1
                             FROM `LA-wörter`
                             WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
-                        )
+                        ) AS exists_result
                     '''
                     cursor.execute(testquery, params)
-                    result = cursor.fetchone()[0]
+                    result = cursor.fetchone()["exists_result"]
 
                     if result == 0:
                         return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
 
                     elif result == 1:
-                        # now select all the words which the student has not mastered, that also correspond to the given wordlist(s)
+                        # select all the words which the student has not mastered, that also correspond to the given wordlist(s)
                         query2 = f'''
                             SELECT word_id, name
                             FROM `LA-wörter`
                             WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
+                            ORDER BY RAND() LIMIT 8
                         '''
-
-
                         cursor.execute(query2, params)
                         result = cursor.fetchall()
 
-            else:
+            else: # if personal pool is neither 0 or 1
                 return jsonify({"error": 1, "message": "personal_pool parameter should be 0 or 1"}), 400
 
-        words = [(row["word_id"], row["name"]) for row in result]
-
-
+        words = [(row["word_id"], row["name"]) for row in result] # get the words in the right form list of tuples [(word_id, name)]
 
         prompt = f"""
         Sie erhalten französische Wörter in der Form (word_id, name)
@@ -166,9 +167,18 @@ def create_exercise():
 
         response_data = response.choices[0].message.parsed.exercise
 
+        # returns a list of dictionaries
+        # [
+        #   {
+        #       "word_id": 21,
+        #       "wort": "wort 1",
+        #       "wortart": 0
+        #   }
+        # ]
+
         return jsonify([a.dict() for a in response_data])
     except Exception as e:
-        return jsonify({"error": 1, "message": {str(e)}})
+        return jsonify({"error": 1, "message": str(e)})
 
 
 @auth.route(app, "/correct_exercise", required_role=["student"], methods=["POST"])
@@ -182,6 +192,7 @@ def correct_exercise():
         # ...
         # "word_8": {"word_id": x, "nomen": , "verb": , "adjektiv": , "adverb":}
         # }
+        # this is the form the data should be in
         data = request.get_json()
 
         prompt = """
@@ -202,10 +213,18 @@ def correct_exercise():
         )
 
         response_data = response.choices[0].message.parsed.corrected_words
+        # returns a list of dictionaries [
+        #   {
+        #       "correct": 1,
+        #       "word": "wort 1",
+        #       "word_id": 0
+        #   }
+        # ]
 
         wrong = []
         right = []
 
+        # sort the results in the lists wrong and right (necessary to edit the score)
         for i in response_data:
             if i.correct == 0:
                 wrong.append(i.word_id)
@@ -215,53 +234,59 @@ def correct_exercise():
         wrong_set = set(wrong)
         right_set = set(right)
 
+        # remove duplicates and the possibility that maybe the verb and adjektive are right but the noun and adverb are wrong
+        # this way if one of the 4 is wrong the word will be saved as wrong
         right = list(right_set - wrong_set)
         wrong = list(wrong_set)
 
-        rw = right + wrong
+        rw = right + wrong # a list of all words without duplicates (needed to check if the word has been used by the student)
 
         with auth.open() as (connection, cursor):
 
             student_id = g.get("user_id")
 
+            # check if the word is already in the LA-fortschritt table for this student
             for word_id in rw:
                 testquery = '''
-                    SELECT 1
-                    FROM `LA-fortschritt`
-                    WHERE student_id = %s AND word_id = %s
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM `LA-fortschritt`
+                        WHERE id = %s AND word_id = %s
+                    ) AS exists_result
                 '''
-
                 cursor.execute(testquery, (student_id, word_id))
-                result = cursor.fetchone()
+                result = cursor.fetchone()["exists_result"] # if there exists an entry 1 if not 0
 
-                if result is None:
+                # if there exists no entry the student has not used the word so it will be inserted into the table with a score of 0
+                if result == 0:
                     insertquery = '''
-                        INSERT INTO `LA-fortschritt` (student_id, word_id, score)
+                        INSERT INTO `LA-fortschritt` (id, word_id, score)
                         VALUES (%s, %s, 0)
                     '''
-
                     params = (student_id, word_id)
                     cursor.execute(insertquery, params)
 
-            # First update
-            query1 = '''
-                UPDATE `LA-fortschritt`
-                SET score = score + 1
-                WHERE word_id IN ({}) AND student_id = %s 
-            '''.format(','.join(['%s'] * len(right)))
-            cursor.execute(query1, (*right, student_id))
+            # now add 1 to the score of all the words the student got right
+            if right:
+                query1 = '''
+                    UPDATE `LA-fortschritt`
+                    SET score = score + 1
+                    WHERE word_id IN ({}) AND id = %s 
+                '''.format(','.join(['%s'] * len(right)))
+                cursor.execute(query1, (*right, student_id))
 
             # Second update
-            query2 = '''
-                UPDATE `LA-fortschritt`
-                SET score = 0
-                WHERE word_id IN ({}) AND student_id = %s
-            '''.format(','.join(['%s'] * len(wrong)))
-            cursor.execute(query2, (*wrong, student_id))
+            if wrong:
+                query2 = '''
+                    UPDATE `LA-fortschritt`
+                    SET score = 0
+                    WHERE word_id IN ({}) AND id = %s
+                '''.format(','.join(['%s'] * len(wrong)))
+                cursor.execute(query2, (*wrong, student_id))
 
         return jsonify([word.dict() for word in response_data])
     except Exception as e:
-        return jsonify({"error": 1, "message": {str(e)}})
+        return jsonify({"error": 1, "message": str(e), "trace": traceback.format_exc()})
 
 
 @auth.route(app, '/get_classes', required_role=["teacher"], methods=['GET'])  # checked
