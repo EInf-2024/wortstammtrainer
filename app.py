@@ -96,67 +96,27 @@ def create_exercise():
 
             # if personal_pool is active the selected words depend on the given wordlist(s) as well as the student and if they've mastered the words
             elif personal_pool == 1:
-
-                # check if the student even has entries in LA-fortschritt which are not mastered
-                query1 = '''
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM `LA-fortschritt`
-                        WHERE score < 3 AND id = %s
-                    ) AS exists_result
+                # Select all words from the selected wordlists that are not mastered (score < 3 or not in fortschritt)
+                ph2 = ','.join(['%s'] * len(wordlist_ids))
+                query = f'''
+                    SELECT w.word_id, w.name
+                    FROM `LA-wörter` w
+                    LEFT JOIN `LA-fortschritt` f ON w.word_id = f.word_id AND f.id = %s
+                    WHERE w.wordlist_id IN ({ph2})
+                    AND (f.score IS NULL OR f.score < 3)
+                    ORDER BY RAND() LIMIT 8
                 '''
-                cursor.execute(query1, (student_id,))
-                result = cursor.fetchone()["exists_result"]
+                params = [student_id] + wordlist_ids
+                cursor.execute(query, params)
+                result = cursor.fetchall()
 
-                if result == 0:
+                if not result:
                     return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
 
-                # if there are entries in LA-fortschritt we can proceed
-                elif result == 1:
-                    # first select all word_ids which are not mastered (score < 3) and are saved for this student (meaning they at least used the words once)
-                    query1 = '''
-                        SELECT word_id
-                        FROM `LA-fortschritt`
-                        WHERE score < 3 AND id = %s
-                    '''
-                    cursor.execute(query1, (student_id,))
-                    result = cursor.fetchall()
-
-                    word_ids = [(row["word_id"]) for row in result] # convert the ids to a list
-                    params = word_ids + wordlist_ids
-
-                    ph1 = ','.join(['%s'] * len(word_ids))      # list of placeholders %s for the query
-                    ph2 = ','.join(['%s'] * len(wordlist_ids))
-
-                    # now check if any of the selected words belong to the given wordlist(s)
-                    testquery = f'''
-                        SELECT EXISTS (
-                            SELECT 1
-                            FROM `LA-wörter`
-                            WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
-                        ) AS exists_result
-                    '''
-                    cursor.execute(testquery, params)
-                    result = cursor.fetchone()["exists_result"]
-
-                    if result == 0:
-                        return jsonify({"error": 1, "message": "no words in personal_pool"}), 400
-
-                    elif result == 1:
-                        # select all the words which the student has not mastered, that also correspond to the given wordlist(s)
-                        query2 = f'''
-                            SELECT word_id, name
-                            FROM `LA-wörter`
-                            WHERE word_id IN ({ph1}) AND wordlist_id IN ({ph2})
-                            ORDER BY RAND() LIMIT 8
-                        '''
-                        cursor.execute(query2, params)
-                        result = cursor.fetchall()
-
-            else: # if personal pool is neither 0 or 1
+            else:  # if personal pool is neither 0 or 1
                 return jsonify({"error": 1, "message": "personal_pool parameter should be 0 or 1"}), 400
 
-        words = [(row["word_id"], row["name"]) for row in result] # get the words in the right form list of tuples [(word_id, name)]
+        words = [(row["word_id"], row["name"]) for row in result]  # get the words in the right form list of tuples [(word_id, name)]
 
         prompt = f"""
         Sie erhalten französische Wörter in der Form (word_id, name)
@@ -249,7 +209,7 @@ def correct_exercise():
         right = list(right_set - wrong_set)
         wrong = list(wrong_set)
 
-        rw = right + wrong # a list of all words without duplicates (needed to check if the word has been used by the student)
+        rw = right + wrong  # a list of all words without duplicates (needed to check if the word has been used by the student)
 
         with auth.open() as (connection, cursor):
 
@@ -265,7 +225,7 @@ def correct_exercise():
                     ) AS exists_result
                 '''
                 cursor.execute(testquery, (student_id, word_id))
-                result = cursor.fetchone()["exists_result"] # if there exists an entry 1 if not 0
+                result = cursor.fetchone()["exists_result"]  # if there exists an entry 1 if not 0
 
                 # if there exists no entry the student has not used the word so it will be inserted into the table with a score of 0
                 if result == 0:
@@ -276,7 +236,7 @@ def correct_exercise():
                     params = (student_id, word_id)
                     cursor.execute(insertquery, params)
 
-            # now add 1 to the score of all the words the student got right
+            # Always increment score for all right answers (even if just inserted)
             if right:
                 query1 = '''
                     UPDATE `LA-fortschritt`

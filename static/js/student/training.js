@@ -32,7 +32,16 @@ async function loadWords(wordlistIds, personalPool) {
             })
         });
 
-        if (!response.ok) throw new Error('Failed to load words');
+        if (!response.ok) {
+            let msg = 'Fehler beim Laden der Wörter';
+            try {
+                const err = await response.json();
+                msg = err.message || msg;
+            } catch {}
+            alert(msg);
+            window.location.href = '/student';
+            return;
+        }
 
         const words = await response.json();
         renderWordTable(words);
@@ -132,3 +141,4 @@ function setupLogout() {
         window.location.href = '/';
     });
 }
+
