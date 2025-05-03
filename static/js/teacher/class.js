@@ -23,7 +23,9 @@ async function loadClassStudents() {
             throw new Error(error.message || 'Failed to load students');
         }
 
-        const students = await response.json();
+        const data = await response.json();
+        const students = data.students;
+        const className = data.class_name;
         console.log('Students loaded:', students);
 
         const classNameElement = document.getElementById('className');
@@ -34,7 +36,8 @@ async function loadClassStudents() {
             return;
         }
 
-        classNameElement.textContent = `Klasse ${classId}`;
+        // Set the class name in the heading
+        classNameElement.textContent = className;
 
         if (students.length === 0) {
             studentList.innerHTML = '<div class="list-group-item">Keine Schüler in dieser Klasse</div>';
@@ -96,9 +99,9 @@ async function loadClassStudents() {
                             return;
                         }
 
-                        progressList.innerHTML = Object.entries(progress).map(([wordlistId, progress]) => `
+                        progressList.innerHTML = Object.entries(progress).map(([wordlistName, progress]) => `
                             <div class="d-flex justify-content-between border-bottom py-2">
-                                <span>Wortliste ${wordlistId}:</span>
+                                <span>${wordlistName}:</span>
                                 <span>${progress}</span>
                             </div>
                         `).join('');

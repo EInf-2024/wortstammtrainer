@@ -256,10 +256,29 @@ def get_students():
             return jsonify({"error": 1, "message": "parameter 'class_id' is required"}), 400
 
         with auth.open() as (connection, cursor):
-            get_query = 'SELECT id, username FROM `mf_student` WHERE department_id = %s ORDER BY username'
+            # First get the class name
+            cursor.execute('''
+                           SELECT label
+                           FROM `mf_department`
+                           WHERE id = %s
+                           ''', (class_id,))
+            class_info = cursor.fetchone()
+            class_name = class_info["label"] if class_info else f"Klasse {class_id}"
+
+            # Then get students
+            get_query = '''
+                        SELECT id, username
+                        FROM `mf_student`
+                        WHERE department_id = %s
+                        ORDER BY username \
+                        '''
             cursor.execute(get_query, (class_id,))
-            result = cursor.fetchall()
-        return jsonify(result)
+            students = cursor.fetchall()
+
+            return jsonify({
+                "class_name": class_name,
+                "students": students
+            })
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
 
@@ -268,31 +287,42 @@ def get_students():
 def get_student():
     try:
         student_id = request.args.get("id", "")
+
         with auth.open() as (connection, cursor):
-            query = 'SELECT wordlist_id FROM `LA-wörter`'
-            cursor.execute(query)
-            result = cursor.fetchall()
-            wordlist_ids = [(row["wordlist_id"]) for row in result]
+            # Get all wordlists with their names
+            cursor.execute('''
+                           SELECT wl.wordlist_id, wl.name
+                           FROM `LA-wortliste` wl
+                           ''')
+            wordlists = cursor.fetchall()
 
             prog = {}
-            for wordlist_id in wordlist_ids:
-                query = 'SELECT word_id FROM `LA-wörter` WHERE wordlist_id = %s'
-                cursor.execute(query, (wordlist_id,))
-                result = cursor.fetchall()
-                maxword_ids = [(row["word_id"]) for row in result]
-                max = len(maxword_ids)
 
-                placeholders = ','.join(['%s']*len(maxword_ids))
-                cursor.execute(f'''
-                    SELECT word_id
-                    FROM `LA-fortschritt`
-                    WHERE word_id IN ({placeholders}) AND id = %s AND score >= 3
-                ''', (*maxword_ids, student_id))
-                result = cursor.fetchall()
-                word_ids = [(row["word_id"]) for row in result]
-                reached = len(word_ids)
+            for wl in wordlists:
+                wordlist_id = wl["wordlist_id"]
+                wordlist_name = wl["name"]
 
-                prog[wordlist_id] = f"{reached}/{max}"
+                # Count total words in this wordlist
+                cursor.execute('''
+                               SELECT COUNT(*) as total
+                               FROM `LA-wörter`
+                               WHERE wordlist_id = %s
+                               ''', (wordlist_id,))
+                total = cursor.fetchone()["total"]
+
+                # Count mastered words for this student in this wordlist
+                cursor.execute('''
+                               SELECT COUNT(*) as mastered
+                               FROM `LA-fortschritt`
+                               WHERE id = %s
+                                 AND word_id IN (SELECT word_id
+                                                 FROM `LA-wörter`
+                                                 WHERE wordlist_id = %s)
+                                 AND score >= 3
+                               ''', (student_id, wordlist_id))
+                mastered = cursor.fetchone()["mastered"]
+
+                prog[wordlist_name] = f"{mastered}/{total}"
 
         return jsonify(prog)
     except Exception as e:
@@ -461,6 +491,7 @@ def get_student_progress():
         return jsonify(progress)
     except Exception as e:
         return jsonify({"error": 1, "message": str(e)}), 500
+
 
 
 if __name__ == "__main__":
